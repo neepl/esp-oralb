@@ -5,7 +5,7 @@ pixel-art faces and weather icons, the teeth-zone chart and the screen layouts
 for the 320x240 landscape display. Renders mockups to PNG; the firmware assets
 are generated from the same data.
 
-    uv run --no-project --with pillow python design.py mock OUTDIR   # Ukrainian in OUTDIR, English in OUTDIR/en
+    uv run --no-project --with pillow python design.py mock OUTDIR [uk|en]  # both: Ukrainian in OUTDIR, English in OUTDIR/en
     uv run --no-project --with pillow python design.py gen      # -> include/gfx_assets.h
     uv run --no-project --with pillow python design.py golden   # -> test/data/golden_*.rle
 """
@@ -548,8 +548,10 @@ def demo_coverage(progress: float) -> dict[str, float]:
     return {z: max(0.0, min(1.0, n - i)) for i, z in enumerate(order)}
 
 
-def mock(out: Path) -> list[Path]:
-    """Writes the Ukrainian mockups to OUT and the English ones to OUT/en."""
+def mock(out: Path, lang: str | None = None) -> list[Path]:
+    """Writes the Ukrainian mockups to OUT and the English ones to OUT/en, or only LANG to OUT."""
+    if lang:
+        return _mock(out, lang)
     paths = _mock(out, "uk")
     paths += _mock(out / "en", "en")
     return paths
@@ -780,7 +782,7 @@ def write_golden(outdir: Path) -> list[Path]:
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) >= 2 else ""
     if cmd == "mock" and len(sys.argv) >= 3:
-        for p in mock(Path(sys.argv[2])):
+        for p in mock(Path(sys.argv[2]), sys.argv[3] if len(sys.argv) >= 4 else None):
             print(p)
     elif cmd == "gen":
         out = Path(sys.argv[2]) if len(sys.argv) >= 3 else ROOT / "include" / "gfx_assets.h"

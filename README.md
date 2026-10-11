@@ -13,22 +13,18 @@ RGB status LED, telnet log and OTA updates over Wi-Fi.
 
 ## Screenshots
 
-| | Ukrainian (default) | English |
-|---|---|---|
-| Clock | <img src="docs/screenshots/1-clock.png" width="320"> | <img src="docs/screenshots/en/1-clock.png" width="320"> |
-| Air-raid alert | <img src="docs/screenshots/9-clock-alert-red.png" width="320"> | <img src="docs/screenshots/en/10-clock-alert-yellow.png" width="320"> |
-| Brushing | <img src="docs/screenshots/2-brushing.png" width="320"> | <img src="docs/screenshots/en/2-brushing.png" width="320"> |
-| Too much pressure | <img src="docs/screenshots/3-brushing-pressure.png" width="320"> | <img src="docs/screenshots/en/3-brushing-pressure.png" width="320"> |
-| Result: 2 min reached | <img src="docs/screenshots/4-result-good.png" width="320"> | <img src="docs/screenshots/en/4-result-good.png" width="320"> |
-| Result: too short | <img src="docs/screenshots/5-result-short.png" width="320"> | <img src="docs/screenshots/en/5-result-short.png" width="320"> |
-| Night | <img src="docs/screenshots/7-clock-night.png" width="320"> | <img src="docs/screenshots/en/8-clock-night-partly.png" width="320"> |
+<table>
+<tr><td><img src="docs/screenshots/1-clock.png" width="320"><br>Clock</td><td><img src="docs/screenshots/9-clock-alert-red.png" width="320"><br>Clock with an air-raid alert</td></tr>
+<tr><td><img src="docs/screenshots/2-brushing.png" width="320"><br>Brushing, current zone in cyan</td><td><img src="docs/screenshots/3-brushing-pressure.png" width="320"><br>Too much pressure</td></tr>
+<tr><td><img src="docs/screenshots/4-result-good.png" width="320"><br>Result: 2 minutes reached</td><td><img src="docs/screenshots/5-result-short.png" width="320"><br>Result: too short</td></tr>
+<tr><td><img src="docs/screenshots/8-clock-night-partly.png" width="320"><br>Night</td><td><img src="docs/screenshots/6-weather-icons.png" width="320"><br>Weather icons</td></tr>
+</table>
 
-Weather icons: <img src="docs/screenshots/6-weather-icons.png" width="320">. All screens on one sheet:
-[Ukrainian](docs/screenshots/0-all.png), [English](docs/screenshots/en/0-all.png).
-
+The screen is in Ukrainian by default; English is selected on the web page (see "Language").
 These are renders from `tools/design/design.py` at 2x, not photos. The firmware draws the same pixels: a native test compares
 its frames with the design pixel for pixel (the panel's RGB565 shifts colours by a few levels). Regenerate with
-`uv run --project tools/python --with pillow python tools/design/design.py mock docs/screenshots`.
+`uv run --project tools/python --with pillow python tools/design/design.py mock docs/screenshots en`
+(`0-all.png` there has every screen on one sheet).
 
 Repository layout: the firmware is at the root (PlatformIO project). `tools/python/` is the original
 Python proof of concept, still used to record zone sessions and train the zone model; `tools/design/`
@@ -119,7 +115,7 @@ string table per language (`LANG`, with `days`, `months` and `str`); `gen` emits
 cannot silently render as `?`). The firmware picks the table through `Scene::lang`. English: "Monday, 5 May" or "Sat, 11 October" (the full weekday when the line fits in 304 px, else the 3-letter one;
 the same rule applies to Ukrainian), "Great!" / "Short!" / "Too hard!" / "Waiting for brush...",
 alert block "ALERT" / "THREAT" / "SAFE", "Kyiv", "at HH:MM" (the Ukrainian "з" is "since", but "since 20:30" does not fit beside the
-icon), side labels L / R. `design.py mock OUT` renders Ukrainian into `OUT` and English into `OUT/en`; English goldens are
+icon), side labels L / R. `design.py mock OUT` renders Ukrainian into `OUT` and English into `OUT/en` (`mock OUT en` writes only English into `OUT`); English goldens are
 `test/data/golden_en_*.rle` (the Ukrainian ones are unchanged). Settings blob version 2 adds `lang`; a stored version 1 blob loads
 with `uk`. The web page itself is English only.
 
