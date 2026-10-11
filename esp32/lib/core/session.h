@@ -10,7 +10,8 @@ namespace oralb {
 constexpr int TARGET_SECONDS = 120;
 constexpr double STALE_AFTER = 3.0;
 constexpr double LOST_AFTER = 10.0;
-constexpr double RESULT_HOLD = 60.0;
+constexpr double RESULT_HOLD = 15.0;            // smiley/result screen, then back to the clock
+constexpr double RESULT_HOLD_ON_CHARGER = 5.0;  // ...or sooner once the brush is back on the charger
 constexpr int MIN_SESSION = 5;
 
 enum class Screen : uint8_t { CLOCK, BRUSHING, RESULT };

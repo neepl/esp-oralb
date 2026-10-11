@@ -234,8 +234,10 @@ void loop() {
   if (ms - last_ldr_ms >= LDR_SAMPLE_MS) {
     last_ldr_ms = ms;
     ldr_level = ldr_ctl.update(ldr_read());
-    if (ms - last_ldr_log_ms >= 10000) {
+    static int logged_level = -1;  // log changes only (keeps the small telnet ring for real events)
+    if (ldr_level != logged_level && ms - last_ldr_log_ms >= 10000) {
       last_ldr_log_ms = ms;
+      logged_level = ldr_level;
       DIAG("ldr raw %.0f -> bl %d", ldr_ctl.average(), ldr_level);
     }
   }

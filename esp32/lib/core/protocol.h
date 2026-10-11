@@ -8,6 +8,7 @@ namespace oralb {
 
 constexpr uint16_t COMPANY_ID = 0x00DC;
 constexpr uint8_t STATE_RUNNING = 3;
+constexpr uint8_t STATE_CHARGING = 4;
 
 struct BrushFrame {
   uint8_t protocol = 0;

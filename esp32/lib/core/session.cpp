@@ -33,8 +33,11 @@ void Session::tick(double now, double wall) {
   (void)wall;
   if (screen == Screen::BRUSHING && now - last_rx > LOST_AFTER)
     end(now, wall);
-  else if (screen == Screen::RESULT && now - result_since > RESULT_HOLD)
-    screen = Screen::CLOCK;
+  else if (screen == Screen::RESULT) {
+    double shown = now - result_since;
+    bool on_charger = has_frame && frame.state == STATE_CHARGING;
+    if (shown > RESULT_HOLD || (on_charger && shown > RESULT_HOLD_ON_CHARGER)) screen = Screen::CLOCK;
+  }
 }
 
 void Session::new_session() {

@@ -25,6 +25,18 @@ static void test_full_cycle() {
   TEST_ASSERT_TRUE(s.screen == Screen::CLOCK);
 }
 
+static void test_result_closes_early_on_charger() {
+  Session s;
+  for (int t = 0; t < 30; t++) s.on_frame(fr(3, t), t, t);
+  s.on_frame(fr(2, 0), 30, 30);
+  TEST_ASSERT_TRUE(s.screen == Screen::RESULT);
+  s.on_frame(fr(STATE_CHARGING, 0), 31, 31);  // put straight back on the charger
+  s.tick(31, 31);
+  TEST_ASSERT_TRUE(s.screen == Screen::RESULT);  // still shown for a moment
+  s.tick(30 + RESULT_HOLD_ON_CHARGER + 1, 0);
+  TEST_ASSERT_TRUE(s.screen == Screen::CLOCK);
+}
+
 static void test_pressure_hits_per_episode() {
   Session s;
   const int seq[] = {0x32, 0xB2, 0xB2, 0x32, 0xB2, 0x32};
@@ -56,6 +68,7 @@ static void test_session_id_bumps() {
 
 void run_session_tests() {
   RUN_TEST(test_full_cycle);
+  RUN_TEST(test_result_closes_early_on_charger);
   RUN_TEST(test_pressure_hits_per_episode);
   RUN_TEST(test_lost_and_short_session);
   RUN_TEST(test_session_id_bumps);
