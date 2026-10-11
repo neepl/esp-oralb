@@ -1,261 +1,303 @@
 # esp-oralb
 
-A bathroom display for the Oral-B iO 8, replacing the SmartGuide that came with the Triumph 7000,
-on a 2.4" ESP32 "Cheap Yellow Display" (ESP32-2432S024C). It listens to the brush's BLE adverts,
-connects over GATT once brushing starts, and shows:
-
-* **Clock**: time, day of the week, date, Kyiv weather icon (day/night set) and the air-raid alert status.
-* **Brushing**: large timer, pressure warning and, if the brush streams IMU data, the 16 mouth zones.
-* **Result**: a good/bad smiley for a few seconds after the session.
-
-Pixel design with Ukrainian (default) or English text (`lang` setting), light-sensor backlight, screen off at night (touch wakes it),
-RGB status LED, telnet log and OTA updates over Wi-Fi.
+esp-oralb is firmware for the ESP32-2432S024C display board. The display shows the data from an Oral-B iO toothbrush. It also
+shows the time, the date, the weather and the air-raid alert status for one region of Ukraine.
 
 ## Screenshots
 
 <table>
 <tr><td><img src="docs/screenshots/1-clock.png" width="320"><br>Clock</td><td><img src="docs/screenshots/9-clock-alert-red.png" width="320"><br>Clock with an air-raid alert</td></tr>
 <tr><td><img src="docs/screenshots/2-brushing.png" width="320"><br>Brushing, current zone in cyan</td><td><img src="docs/screenshots/3-brushing-pressure.png" width="320"><br>Too much pressure</td></tr>
-<tr><td><img src="docs/screenshots/4-result-good.png" width="320"><br>Result: 2 minutes reached</td><td><img src="docs/screenshots/5-result-short.png" width="320"><br>Result: too short</td></tr>
+<tr><td><img src="docs/screenshots/4-result-good.png" width="320"><br>Result: 2 minutes or more</td><td><img src="docs/screenshots/5-result-short.png" width="320"><br>Result: less than 2 minutes</td></tr>
 <tr><td><img src="docs/screenshots/8-clock-night-partly.png" width="320"><br>Night</td><td><img src="docs/screenshots/6-weather-icons.png" width="320"><br>Weather icons</td></tr>
 </table>
 
-The screen is in Ukrainian by default; English is selected on the web page (see "Language").
-These are renders from `tools/design/design.py` at 2x, not photos. The firmware draws the same pixels: a native test compares
-its frames with the design pixel for pixel (the panel's RGB565 shifts colours by a few levels). Regenerate with
-`uv run --project tools/python --with pillow python tools/design/design.py mock docs/screenshots en`
-(`0-all.png` there has every screen on one sheet).
+The screenshots show the English text. The default language is Ukrainian. To change the language, refer to
+[Change the settings](#change-the-settings).
 
-Repository layout: the firmware is at the root (PlatformIO project). `tools/python/` is the original
-Python proof of concept, still used to record zone sessions and train the zone model; `tools/design/`
-generates the pixel UI. The C++ in `lib/core/` is a port of the Python modules (`protocol.py`,
-`session.py`, `gatt.py`, `zonemodel.py`).
+## Equipment
 
-## Board and pinout
+* ESP32-2432S024C board (2.4 in, 320x240, "Cheap Yellow Display").
+* USB-A to USB-C cable.
+* Oral-B iO toothbrush. The Bluetooth setting in the toothbrush menu must be on.
+* Wi-Fi network, 2.4 GHz, with internet access.
+* Computer with git and PlatformIO Core 6.2 or later.
+* For the tests: a C++ compiler (clang++ or g++).
+* For the tools in `tools/`: [uv](https://docs.astral.sh/uv/).
 
-Sunton **ESP32-2432S024C** ("Cheap Yellow Display" family): ESP32-WROOM-32 (no PSRAM), 2.4"
-240x320 ILI9341 SPI TFT, CST816S capacitive touch (I2C), CH340 USB serial.
+The board has a CH340 USB-serial chip. macOS 12 (and later) and Linux have the driver. On Windows and on older macOS, install
+the WCH CH34x driver.
 
-| Function | GPIO |
+## Install the firmware
+
+1. Clone the repository. Go to the root directory of the repository.
+2. Copy the example secrets file:
+   ```
+   cp include/secrets.example.h include/secrets.h
+   ```
+3. Open `include/secrets.h`. Change `OTA_PASSWORD` to a new password. You use this password for the web page and for the
+   updates over Wi-Fi.
+4. Optional: open `include/config.h` and change the default values. You can change most of these values on the web page later.
+5. Connect the board to the computer with the USB cable.
+6. Build the firmware and upload it:
+   ```
+   pio run -t upload
+   ```
+7. If the upload cannot connect to the board, push and hold the BOOT button. Release the button when the upload starts.
+
+The first build takes approximately 3 minutes.
+
+NOTE: When you open the serial port, the board restarts. To see the serial log, use `pio device monitor` (115200 baud).
+
+If the image is mirrored or turned, or if the colours are incorrect, add one of these flags to `build_flags` in
+`platformio.ini`: `BOARD_TFT_OFFSET_ROTATION`, `BOARD_TFT_RGB_ORDER_BGR`, `BOARD_TFT_INVERT`. Then upload the firmware again.
+
+## Connect to Wi-Fi
+
+1. Start the board. If the board has no saved network, the LED is blue. The screen shows "Wi-Fi: join esp-oralb-setup".
+2. On a phone, connect to the open Wi-Fi network **esp-oralb-setup**. The setup page opens. If the setup page does not open,
+   go to http://192.168.4.1.
+3. Select your network. Use a 2.4 GHz network.
+4. Type the network password and save.
+5. The display connects to the network and gets the time from the internet.
+
+To change the network later, do one of these steps:
+
+* Push and hold the BOOT button for 5 seconds.
+* On the web page, push **Wi-Fi setup portal**.
+
+The setup network is then available for 3 minutes, and the LED is blue. If you do not save a new network, the display keeps the
+old network.
+
+If the saved network is not available, the display tries to connect again and again. The setup network does not open
+automatically. The toothbrush screens operate without Wi-Fi.
+
+## Use the display
+
+### Clock screen
+
+The clock screen shows:
+
+* The time and the date.
+* The weather icon and the temperature. The display hides them if it has no weather data for 3 hours.
+* The air-raid alert block: the alert status, the time when this status started and the city.
+* The status line: "Waiting for brush...".
+
+| Alert block | Meaning |
 |---|---|
-| TFT MOSI / MISO / SCLK | 13 / 12 / 14 |
-| TFT CS / DC / RST | 15 / 2 / not connected |
-| TFT backlight (PWM) | 27 |
-| Touch SDA / SCL | 33 / 32 |
-| Touch INT / RST | 21 / 25 |
-| Touch I2C address | 0x15 (CST816S) |
+| Red missile, ALERT | Air-raid alert |
+| Yellow drone, THREAT | Threat |
+| Green shield, SAFE | No alert |
+| No block | No alert data for 2 minutes |
 
-Source (pin defines, ILI9341 + CST816S, BGR colour space, mirror-X):
-[rzeldent/platformio-espressif32-sunton `esp32-2432S024C.json`](https://github.com/rzeldent/platformio-espressif32-sunton/blob/main/esp32-2432S024C.json).
-The same file lists the unused TF card (CS 5, MOSI 23, SCLK 18, MISO 19), RGB LED (4/16/17),
-light sensor (34); the speaker amplifier on GPIO26 is unused (no speaker fitted). Pins live in `include/board.h`; the LovyanGFX config is in `src/ui.cpp`.
+If the display does not have the time, the clock shows `--:--`.
 
-If the picture is mirrored/rotated or colours are swapped/inverted, override
-`BOARD_TFT_OFFSET_ROTATION`, `BOARD_TFT_RGB_ORDER_BGR`, `BOARD_TFT_INVERT` via `build_flags`.
+### Brushing screen
 
-## Build, test, flash
+Start the toothbrush. The display shows the brushing screen automatically.
 
-```
-pio run                  # build (PlatformIO Core 6.2+, pioarduino platform 55.03.312 = Arduino-ESP32 3.3.12 on ESP-IDF 5.5.5, mbedTLS 3.6.6)
-pio test -e native       # host unit tests (needs a C++ compiler: clang++/g++)
-pio run -t upload        # flash over USB (CH340)
-pio device monitor       # 115200 baud
-```
+* The timer is white. It is red when the pressure is too high. It is cyan after 2:00.
+* The 8 squares show the progress. Each square is 15 seconds. The current square flashes.
+* The teeth chart shows 16 zones. The current zone is cyan. A zone becomes white after 7.5 seconds of brushing. The chart
+  shows only if the toothbrush sends motion data.
+* "Too hard!" shows when the pressure is too high.
 
-The board enumerates through a CH340 USB-serial chip. macOS 12+ and Linux have a driver built in;
-on older macOS or on Windows install the WCH CH34x driver. If the upload cannot sync, hold BOOT
-while it connects. Partition table: `min_spiffs` (two 1.9 MB app slots, needed for OTA; the firmware is ~1.3 MB).
+### Result screen
 
-Pinned libraries: LovyanGFX 1.2.28, NimBLE-Arduino 2.5.1, WiFiManager 2.0.17 (its one format warning is in the library). ESP-IDF 5 uses the TLSF heap allocator, which does not fragment over time like IDF 4.4. `lib_ignore = Wire` keeps LovyanGFX from linking the IDF I2C driver (IRAM overflow); touch is read by the bit-banged `src/touch.cpp`. `custom_sdkconfig` in `platformio.ini` shrinks the mbedTLS send buffer to 4 KB with dynamic buffers (the alert TLS fetch ran out of heap otherwise); it makes PlatformIO rebuild the framework libraries (~2 min on a clean build) and needs the partition table as a local file (`min_spiffs.csv`).
+Stop the toothbrush. The display shows the result screen:
 
-## First boot / Wi-Fi
+* A happy face and "Great!" if you brushed for 2 minutes or more.
+* A sad face and "Short!" if you brushed for less than 2 minutes.
+* The brushing time and the teeth chart.
 
-1. With no saved network the setup portal opens (LED blue) and the clock screen shows
-   `Wi-Fi setup: join esp-oralb-setup`. It stays open until a network is saved.
-2. Join the open Wi-Fi network **esp-oralb-setup** with a phone; the captive portal opens
-   (or browse to 192.168.4.1), pick your network (2.4 GHz only), enter the password.
-3. The clock syncs over NTP (POSIX TZ `EET-2EEST,M3.5.0/3,M10.5.0/4`, Europe/Kyiv, `TZ_POSIX` in
-   `include/config.h`). See "Network" below for always-on vs. short Wi-Fi sessions.
-4. With a saved network the portal **never opens on its own**: the boot connection gets
-   `WIFI_CONNECT_TIMEOUT_S` (30 s), then it keeps retrying in the background (logged as
-   `wifi: saved network '...'`, `wifi: disconnected (reason N)`). Without Wi-Fi the clock shows `--:--`;
-   brushing works regardless.
-5. **Hold the BOOT button for 5 s** to open the setup portal on demand (3 min, LED blue); the saved network
-   is kept unless you enter a new one. Touching the screen only ever wakes the backlight.
+The result screen shows for 15 seconds. If you put the toothbrush on the charger, it shows for 5 seconds. The display does not
+show a result for a session of less than 5 seconds.
 
-## Screens (landscape 320x240, pixel design)
+### LED
 
-Black background, pixel fonts, Ukrainian text by default (English selectable, see "Language" below). The single source of truth is `tools/design/design.py`
-(`uv run --no-project --with pillow python design.py mock OUT` renders mockups; `gen` writes
-`include/gfx_assets.h`; `golden` writes `test/data/golden_*.rle`). The firmware draws the same
-coordinates through `lib/core/screens.cpp`, and a native test compares the result pixel for pixel.
-Fonts: big 3x5 block digits and **Press Start 2P** (8x8, Cyrillic) by The Press Start 2P Project
-Authors, SIL Open Font License 1.1 (`tools/design/OFL.txt`).
-
-* **Brushing**: big `M:SS` timer (white; red under high pressure with "Тиснеш!" bottom left; cyan after
-  2:00), 8 progress squares (15 s each, the current one blinks at 1 Hz), teeth chart (current zone cyan,
-  coverage grey -> white at 7.5 s per zone, Л/П side labels). Without zone data (no ff0d) the chart is hidden and
-  timer + progress are centred vertically.
-* **Result** (15 s after the session ends, or 5 s once the brush is back on the charger; sessions < 5 s ignored): pixel face (happy from 2:00, else sad) with
-  "Чудово!" / "Замало", final time, teeth chart with the coverage of the session that just ended
-  (centred face and time when there is no zone data).
-* **Clock**: big `HH:MM`, "Субота, 10 жовтня" (the short weekday "Пт, 27 листопада" when the full line is wider than 304 px),
-  weather icon + temperature (hidden until the first fetch), air-raid alert block, small status line ("Чекаю щітку...", or the Wi-Fi setup hint).
-
-Rendering uses four 320x60 sprite bands (38 KB; no full-screen framebuffer, no PSRAM).
-The panel is RGB565, the mockups are RGB888, so colours differ by at most 7 per channel on the device;
-the native test compares RGB888 exactly.
-
-## Language
-
-The `lang` setting (web page select, `uk` default or `en`) switches every on-screen text live, no reboot: weekday and date line,
-result captions, pressure warning, status lines, alert block, side labels and the OTA notices. `tools/design/design.py` holds one
-string table per language (`LANG`, with `days`, `months` and `str`); `gen` emits both into `include/gfx_assets.h` as
-`gfx::LANGS[]` and the font subset is the union of the base set and every character used by any language (so a new string
-cannot silently render as `?`). The firmware picks the table through `Scene::lang`. English: "Monday, 5 May" or "Sat, 11 October" (the full weekday when the line fits in 304 px, else the 3-letter one;
-the same rule applies to Ukrainian), "Great!" / "Short!" / "Too hard!" / "Waiting for brush...",
-alert block "ALERT" / "THREAT" / "SAFE", "Kyiv", "at HH:MM" (the Ukrainian "з" is "since", but "since 20:30" does not fit beside the
-icon), side labels L / R. `design.py mock OUT` renders Ukrainian into `OUT` and English into `OUT/en` (`mock OUT en` writes only English into `OUT`); English goldens are
-`test/data/golden_en_*.rle` (the Ukrainian ones are unchanged). Settings blob version 2 adds `lang`; a stored version 1 blob loads
-with `uk`. The web page itself is English only.
-
-## Weather
-
-Open-Meteo current conditions over **plain HTTP** (`api.open-meteo.com` serves HTTP; no TLS heap cost),
-location `WEATHER_LAT/LON` in `include/config.h` (Kyiv), refreshed every `WEATHER_REFRESH_MIN` (30) minutes
-only while the clock screen is showing, in the same short Wi-Fi session as NTP when they coincide.
-WMO codes map to icons: 0-1 clear, 2 partly, 3 cloudy, 45/48 fog, 51-67 and 80-82 rain, 71-77 and 85-86 snow, 95-99 storm.
-
-## Backlight, night mode and LED
-
-* **Light sensor** (CdS on GPIO34, ADC 0 dB): the backlight follows ambient light. The reading is smoothed
-  (EMA over a few seconds), mapped linearly between `LDR_BRIGHT_RAW` (-> `BACKLIGHT_MAX`) and `LDR_DARK_RAW`
-  (-> `BACKLIGHT_MIN`) and slew-limited, so it does not flicker. It replaces the old fixed level and idle dimming.
-  The log prints `ldr raw <avg> -> bl <level>` when the level changes: use it to calibrate the two raw values in `include/config.h`
-  (CYD boards usually read high in the dark and near 0 in bright light).
-* **Night mode**: between `NIGHT_START_H` (23) and `NIGHT_END_H` (7), on the clock screen without brush activity the
-  backlight turns fully off after `NIGHT_WAKE_S` (8) seconds. A touch wakes it for the same 8 s. Brushing turns it on,
-  and after a night session the result screen stays for its normal hold, then the clock goes dark 8 s later. When on at
-  night the sensor level is used. BLE keeps running (no deep sleep).
-* **RGB LED** (GPIO 4/16/17, active low via `LED_ACTIVE_LOW`, brightness capped by `LED_MAX` = 40/255):
-  dim green while brushing; red flashing at about 4 Hz under high pressure (takes precedence); three green blinks (1.5 s)
-  when brush time reaches 2:00, then dim green again; blue while the Wi-Fi setup portal is open; otherwise off.
-  Always off during night hours. The pins are driven to "off" at the very start of `setup()`; `LED_SELF_TEST`
-  flashes red, green, blue at boot.
-
-## Network
-
-* **Always on (default, `WIFI_ALWAYS_ON 1` in `include/config.h`)**: after the Wi-Fi portal / auto-connect at boot the
-  device stays connected in STA mode (auto-reconnect, default modem sleep, which BLE coexistence needs). SNTP keeps syncing
-  continuously; the weather is fetched on the usual schedule (30 min, quick retries after a failure, only on the clock
-  screen, never while brushing) without switching Wi-Fi off. Connect/disconnect/IP are logged
-  (`wifi: connected 192.168.x.x rssi -NN`).
-* **Short sessions (`WIFI_ALWAYS_ON 0`)**: Wi-Fi is switched on briefly for NTP + weather and then off again. The
-  services below only exist while Wi-Fi is up, so they are effectively unavailable in this mode.
-* **mDNS**: `esp-oralb.local`, advertising `_arduino._tcp` (OTA) and `_telnet._tcp`.
-* **Log over telnet** (port 23, up to 2 clients, plain text): `nc esp-oralb.local 23`. Every `DIAG()` line and the ESP-IDF
-  log output (`E (14644) wifi: ...`, still also sent to the UART) go to a ring of the last 200 lines (100 chars each,
-  longer lines end in `~`). A new client first gets the ring, then live lines. Sending is non-blocking: a client that cannot
-  keep up loses the oldest lines (`[N lines dropped]`), BLE and drawing are never stalled. The ring is static memory (~20 KB).
-* **OTA update**: the first flash must be over USB. After that:
-  1. `cp include/secrets.example.h include/secrets.h` and set `OTA_PASSWORD` (`secrets.h` is git-ignored; the build falls back
-     to the example file with `change-me` if it is missing), then flash that firmware once over USB.
-  2. `ESP_ORALB_OTA_PASSWORD=<the password> pio run -e cyd_ota -t upload` (the password is read from the environment, it is not
-     stored in `platformio.ini`; the env uses `upload_port = esp-oralb.local`).
-  During an update the BLE scan stops and the GATT link is dropped, the screen shows "Оновлення..." with a percentage,
-  progress is logged every 10 %; on success the device reboots; on an error "Помилка оновлення" is shown for 3 s and normal
-  operation resumes.
-
-## Air-raid alert block
-
-The bottom-right corner of the clock screen shows the alert state of one region, replacing the old "last session"
-block (the session's last result is still kept in memory for a future web UI): an icon and the state (missile +
-"ТРИВОГА" red; Shahed-style drone + "ЗАГРОЗА" yellow; two-tone green shield + "БЕЗПЕЧНО" when there is no alert, shown
-for as long as that lasts), "з HH:MM" since when (local time) and the city. The icon art, colours and
-texts are generated from `tools/design/design.py` (`ALERT_ICON`, `ALERT_STYLE`, `STR`): change them there, then run
-`design.py gen` and `design.py golden`.
-
-* **API**: `GET https://siren.pp.ua/api/v3/alerts/{ALERT_REGION_ID}` with `accept: application/json` (HTTPS only; HTTP
-  answers 301; limit 50 requests/min per IP). `ALERT_REGION_ID` in `include/config.h`: `"31"` = м. Київ (default), `"14"` = Київська область.
-  This reimplements the PaulAnnekov/uasiren client.
-* **Mapping**: no active alerts -> clear. An alert with a "Red" level, or without a level list (a full alert) -> red. Otherwise "Yellow" -> yellow.
-  Alert types are not distinguished (AIR, ARTILLERY, ...). `since` is the `createdAt` of the chosen level (the alert's `lastUpdate` as fallback),
-  converted from UTC to local time. The parser is in `lib/core/alert.cpp` with native tests.
-* **Polling**: every `ALERT_POLL_S` (15) s, only while the clock screen is showing (never while brushing; right away when the clock returns
-  after a session), only with `WIFI_ALWAYS_ON 1` (no clock needed: certificate dates are not checked in this mbedTLS config). With `WIFI_ALWAYS_ON 0` the block stays hidden.
-  If no poll has succeeded for `ALERT_MAX_AGE_S` (120) s the state becomes unknown and the block is hidden.
-* **TLS**: `WiFiClientSecure` with the pinned root CA ISRG Root X1 (`include/isrg_root_x1.h`, from letsencrypt.org/certs/isrgrootx1.pem),
-  one handshake per poll, connection closed afterwards. To leave heap for TLS (~40 KB) the screen is drawn in 8 bands of 320x30 (19 KB sprite).
-  Serial/telnet log: `alert: <none|yellow|red> since HH:MM` on changes, `alert: fetch failed (<code>), heap free X largest Y` on errors.
-
-## Web UI and time keeping
-
-Needs `WIFI_ALWAYS_ON 1`. **http://esp-oralb.local/** (or the device IP, port 80), one small dark single-page app
-(source `tools/web/index.html`, served gzipped from flash). **Basic auth on every URL**: user `esp-oralb`, password =
-`OTA_PASSWORD` from `include/secrets.h`. POSTs also need an `X-Requested-With` header (the page sends it; it stops a
-foreign web page from using your cached login). The server runs in the network task between the weather/alert fetches
-(an HTTP request never overlaps a TLS handshake; a page load may wait a few seconds while a fetch runs). It stops while the
-Wi-Fi setup portal is open (port 80) and during OTA, and comes back by itself.
-
-| Endpoint | |
+| LED | Meaning |
 |---|---|
-| `GET /api/status` | JSON: firmware build + SDK, uptime, heap free/largest, Wi-Fi SSID/RSSI/IP, device time + source + TZ, light sensor (smoothed raw, level, applied backlight), screen, brush last seen / last session, weather and alert state |
-| `GET /api/settings`, `POST /api/settings` | form-urlencoded; any subset of the keys below; 400 `{"error":...}` on a bad value (nothing is applied) |
-| `POST /api/time` | `epoch=<UTC seconds>` or `local=YYYY-MM-DDTHH:MM[:SS]` (read in the device's time zone, DST-aware); sets the clock, source `manual` |
-| `POST /api/reboot` | saves the time, restarts |
-| `POST /api/portal` | opens the Wi-Fi setup portal (same as holding BOOT) |
+| Dim green | Brushing |
+| Red, flashes | Pressure is too high |
+| Green, 3 flashes | Brushing time is 2:00 |
+| Blue | The Wi-Fi setup network is open |
+| Off | All other conditions, and always at night |
 
-Settings (NVS namespace `cfg`, defaults = `config.h`, applied live): `lat`, `lon`, `loc` (display name only), `region` (alert region
-id), `tz` (POSIX TZ string), `night_start`, `night_end`, `night_wake` (s), `ldr_bright`, `ldr_dark`, `bl_min`, `bl_max`,
-`led_max`, `show_weather`, `show_alert`, `show_zones` (0/1), `lang` (`uk` default | `en`, applied on the next frame). Night with `night_start == night_end` never happens. A new
-location or region invalidates the old data and refetches at once; a disabled alert stops polling; a disabled widget draws
-as its "no data" state (weather/alert hidden, plain brushing screen without the teeth chart; the zone tracking itself keeps
-running). The `config.h` values are only the defaults.
+### Backlight and night mode
 
-**Time without internet.** Source levels: `none < restored < rtc < manual < ntp`, shown in `/api/status`.
-* At boot, before Wi-Fi: if the system time is valid (the IDF keeps it across software resets: RTC timer plus the boot-time
-  offset in RTC store registers) it is kept, source `rtc`; otherwise the epoch last saved in NVS is restored (so the clock is
-  behind by the power-off time), source `restored`. A system time more than a day behind the saved one is distrusted.
-* The clock, night mode and the weather day/night icon work on any source. Weather and alerts still need Wi-Fi.
-* NTP keeps syncing while Wi-Fi is up; every sync (also the hourly ones) sets source `ntp`. A manual set (`POST /api/time`) is
-  source `manual` until the next NTP sync.
-* The epoch is saved to NVS (one 8-byte key `cfg/epoch`) after every NTP sync, after a manual set, every 10 minutes, and before
-  each intentional restart (portal save, heap safety restart, reboot endpoint, OTA end).
-* The RGB LED never signalled a missing NTP sync (it has no time input), so it is unchanged.
+The backlight brightness changes with the light in the room.
 
-## Zones
+At night (default: 23:00 to 07:00), the backlight goes off 8 seconds after the clock screen shows. To turn on the backlight for
+8 seconds, touch the screen. When you start the toothbrush, the backlight comes on.
 
-* Scanning is continuous (company ID `0x00DC`; the raw NimBLE manufacturer field is stripped of its
-  two company-ID bytes before decoding; ~8 adverts/s drive the session state machine).
-* When the brush advertises, the firmware connects as a GATT client (scanning continues) and, if
-  characteristic `a0f0ff0d-5047-4d53-8208-4f72616c2d42` exists, subscribes to ff0d (IMU), ff08 (time),
-  ff04 (state), ff0b (pressure, raw u16 at offset 3). If ff0d is missing, zones are unsupported: it
-  never retries and the display stays plain.
-* If adverts stop while connected, frames are synthesized from GATT time/state; "too much pressure" is the
-  brush's own level in byte 0 of ff0b (0 light, 1 normal, 2 too much; ~2500 raw on the iO 8), applied immediately.
-* IMU samples feed the tracker only while BRUSHING; the tracker resets when `session_id` changes.
-  Each 0.5 s window yields 12 features (tilt, gyro mean, gyro spread, accel spread) scored by an LDA
-  model and smoothed by the sticky HMM filter. There is no grip alignment with the LDA model.
-  Reconnect happens 3 s after a disconnect, once the brush advertises again.
-* The default model is `tools/python/src/esp_oralb/zone_model.json`, embedded as `lib/core/zone_model_data.h`
-  (regenerate with `python3 tools/gen_model_header.py`).
+## Use the web page
 
-## Layout and tests
+1. Go to **http://esp-oralb.local/**. If this address does not work, use the IP address of the display.
+2. Type the user name `esp-oralb` and the password `OTA_PASSWORD` from `include/secrets.h`.
+
+The web page has 4 sections: **Status**, **Time**, **Settings** and **Device**.
+
+### Set the time
+
+The display gets the time from the internet. It saves the time in its memory every 10 minutes. If the power goes off and the
+internet is not available, the display shows the last saved time. This time is late by the period without power.
+
+To set the time manually, do one of these steps in the **Time** section:
+
+* Push **Use this device's time**.
+* Type the date and the time, and push **Set**.
+
+When the internet is available again, the display replaces the manual time with the internet time.
+
+The **Source** field shows where the time comes from:
+
+| Source | Meaning |
+|---|---|
+| `ntp` | Internet time |
+| `manual` | Time from the web page |
+| `rtc` | Time kept after a restart without power loss |
+| `restored` | Last saved time after a power loss. The time is late. |
+| `none` | No time |
+
+### Change the settings
+
+1. Change the values in the **Settings** section.
+2. Push **Save**.
+
+The display uses the new values immediately. A restart is not necessary. If a value is not correct, the page shows an error and
+the display does not change the settings.
+
+| Field | Key | Default | Description |
+|---|---|---|---|
+| Latitude, Longitude | `lat`, `lon` | 50.45, 30.52 | Location for the weather |
+| Location name | `loc` | Kyiv | Name for your reference. The screen does not show it. |
+| Alert region id | `region` | 31 | 31 = Kyiv city, 14 = Kyiv oblast |
+| Time zone | `tz` | `EET-2EEST,M3.5.0/3,M10.5.0/4` | POSIX TZ string |
+| Night starts, Night ends | `night_start`, `night_end` | 23, 7 | Hours of the night mode. If the two values are equal, the night mode is off. |
+| Night wake after touch | `night_wake` | 8 | Seconds |
+| Light sensor: bright reading | `ldr_bright` | 150 | Sensor value for the maximum backlight |
+| Light sensor: dark reading | `ldr_dark` | 1500 | Sensor value for the minimum backlight |
+| Backlight min, max | `bl_min`, `bl_max` | 20, 255 | 0 to 255 |
+| LED max brightness | `led_max` | 40 | 0 to 255 |
+| Display language | `lang` | `uk` | `uk` (Ukrainian) or `en` (English) |
+| Show weather | `show_weather` | on | |
+| Show air-raid alert | `show_alert` | on | |
+| Show zone map | `show_zones` | on | |
+
+To adjust the light sensor:
+
+1. Make the room bright. Read the first value of "Light sensor raw / level / backlight" in the **Status** section. Type this
+   value in **Light sensor: bright reading**.
+2. Make the room dark. Read the value again. Type this value in **Light sensor: dark reading**.
+3. Push **Save**.
+
+### Restart the display
+
+In the **Device** section, push **Reboot**.
+
+### HTTP API
+
+All requests need the user name and the password. All POST requests also need the header `X-Requested-With`.
+
+| Request | Function |
+|---|---|
+| `GET /api/status` | Gives the status as JSON |
+| `GET /api/settings` | Gives the settings as JSON |
+| `POST /api/settings` | Changes the settings. Send one or more keys from the settings table, form-encoded. |
+| `POST /api/time` | Sets the time. Send `epoch=<UTC seconds>` or `local=YYYY-MM-DDTHH:MM`. |
+| `POST /api/reboot` | Restarts the display |
+| `POST /api/portal` | Opens the Wi-Fi setup network |
+
+Example:
 
 ```
-include/board.h, config.h     pins, TZ, timings
-src/                          Arduino code: main, ui (LovyanGFX), ble_scan/ble_link (NimBLE), net (WiFiManager+NTP)
-lib/core/                     plain C++17, no Arduino: protocol, session, imu (ff0d), zonemodel, screens (drawing), weather, generated headers
-test/test_core/               Unity tests (native)
-test/data/                    io8_session.txt (real capture), zones_golden.txt (Python reference vectors)
-tools/gen_model_header.py     zone_model.json -> C++ header
-tools/web/index.html          web UI page; `uv run python tools/gen_web.py` gzips it into include/web_page.h
-tools/make_golden.py          Python -> golden fixture:  uv run --project tools/python python tools/make_golden.py
-tools/design/                 design.py (pixel design source of truth; gen/golden/mock), OFL.txt, Press Start 2P font
-tools/python/                 Python PoC: live console display, zone recorder/trainer (uv project)
+curl -u esp-oralb:<password> -H 'X-Requested-With: x' -d lang=en http://esp-oralb.local/api/settings
 ```
 
-Native tests replay the real iO 8 capture (same assertions as `test_real_session.py`), check the ff0d
-and advert decoders, and compare the C++ imu12 features (1e-9), ZoneFilter and ZoneTracker against Python
-output on real zone recordings (including plain-motion packets without gyro).
+## Update the firmware over Wi-Fi
 
+Before the first update over Wi-Fi, upload the firmware with the USB cable. Refer to [Install the firmware](#install-the-firmware).
+
+1. Make sure that the display shows the clock screen. Do not update during brushing.
+2. Upload the firmware:
+   ```
+   ESP_ORALB_OTA_PASSWORD=<password> pio run -e cyd_ota -t upload
+   ```
+
+During the update, the screen shows "Updating..." and the percentage. After the update, the display restarts. If the update
+fails, the screen shows "Update failed" for 3 seconds. The display then continues with the old firmware.
+
+## Read the log
+
+Connect to the display with telnet on port 23:
+
+```
+nc esp-oralb.local 23
+```
+
+The display sends the last 32 lines, then the new lines. Two clients can connect at the same time.
+
+## Change the firmware
+
+### Run the tests
+
+```
+pio test -e native
+cd tools/python && uv run pytest
+```
+
+### Change the screen design
+
+The file `tools/design/design.py` contains the screen design and the screen texts.
+
+1. Change `tools/design/design.py`.
+2. Make the firmware header and the test images:
+   ```
+   uv run --project tools/python --with pillow python tools/design/design.py gen
+   uv run --project tools/python --with pillow python tools/design/design.py golden
+   ```
+3. Run the tests.
+4. Optional: make the PNG images of all screens. `OUT` gets the Ukrainian images and `OUT/en` gets the English images:
+   ```
+   uv run --project tools/python --with pillow python tools/design/design.py mock OUT
+   ```
+5. Optional: make the screenshots for this file again:
+   ```
+   uv run --project tools/python --with pillow python tools/design/design.py mock docs/screenshots en
+   ```
+
+### Change the web page
+
+1. Change `tools/web/index.html`.
+2. Make the firmware header:
+   ```
+   python3 tools/gen_web.py
+   ```
+3. Build the firmware.
+
+### Record the zones and train the zone model
+
+To record the zones and train a new model, refer to [tools/python/README.md](tools/python/README.md). Then make the firmware
+header and build the firmware:
+
+```
+python3 tools/gen_model_header.py
+```
+
+### Directory layout
+
+| Directory | Contents |
+|---|---|
+| `include/` | Pins (`board.h`), default values (`config.h`), secrets, generated headers |
+| `src/` | Firmware: display, Bluetooth, Wi-Fi, web page, log |
+| `lib/core/` | Firmware parts that the tests use on the computer |
+| `test/` | Tests and test data |
+| `tools/design/` | Screen design and font |
+| `tools/web/` | Web page source |
+| `tools/python/` | Python tools: display on the computer, zone recording and training |
+| `docs/screenshots/` | Screenshots for this file |
+
+## Licence of the font
+
+The screen font is Press Start 2P by The Press Start 2P Project Authors, SIL Open Font License 1.1
+(`tools/design/OFL.txt`).
