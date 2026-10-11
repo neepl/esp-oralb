@@ -72,3 +72,25 @@ int diag_ring_next(uint32_t& cursor, char* out, size_t cap, uint32_t* skipped) {
   portEXIT_CRITICAL(&ring_mux);
   return n;
 }
+
+namespace {
+constexpr uint32_t RESTART_MAGIC = 0x52535431;  // "RST1"
+RTC_NOINIT_ATTR uint32_t restart_magic;
+RTC_NOINIT_ATTR char restart_note[48];
+char taken_note[48];
+}  // namespace
+
+void diag_note_restart(const char* why) {
+  strncpy(restart_note, why, sizeof restart_note - 1);
+  restart_note[sizeof restart_note - 1] = 0;
+  restart_magic = RESTART_MAGIC;
+}
+
+const char* diag_take_restart_note() {
+  if (restart_magic == RESTART_MAGIC) {
+    memcpy(taken_note, restart_note, sizeof taken_note);
+    taken_note[sizeof taken_note - 1] = 0;
+    restart_magic = 0;
+  }
+  return taken_note;
+}

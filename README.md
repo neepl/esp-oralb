@@ -154,11 +154,46 @@ texts are generated from `tools/design/design.py` (`ALERT_ICON`, `ALERT_STYLE`, 
   Alert types are not distinguished (AIR, ARTILLERY, ...). `since` is the `createdAt` of the chosen level (the alert's `lastUpdate` as fallback),
   converted from UTC to local time. The parser is in `lib/core/alert.cpp` with native tests.
 * **Polling**: every `ALERT_POLL_S` (15) s, only while the clock screen is showing (never while brushing; right away when the clock returns
-  after a session), only with `WIFI_ALWAYS_ON 1` and after NTP has set the clock (certificate dates). With `WIFI_ALWAYS_ON 0` the block stays hidden.
+  after a session), only with `WIFI_ALWAYS_ON 1` (no clock needed: certificate dates are not checked in this mbedTLS config). With `WIFI_ALWAYS_ON 0` the block stays hidden.
   If no poll has succeeded for `ALERT_MAX_AGE_S` (120) s the state becomes unknown and the block is hidden.
 * **TLS**: `WiFiClientSecure` with the pinned root CA ISRG Root X1 (`include/isrg_root_x1.h`, from letsencrypt.org/certs/isrgrootx1.pem),
   one handshake per poll, connection closed afterwards. To leave heap for TLS (~40 KB) the screen is drawn in 8 bands of 320x30 (19 KB sprite).
   Serial/telnet log: `alert: <none|yellow|red> since HH:MM` on changes, `alert: fetch failed (<code>), heap free X largest Y` on errors.
+
+## Web UI and time keeping
+
+Needs `WIFI_ALWAYS_ON 1`. **http://esp-oralb.local/** (or the device IP, port 80), one small dark single-page app
+(source `tools/web/index.html`, served gzipped from flash). **Basic auth on every URL**: user `esp-oralb`, password =
+`OTA_PASSWORD` from `include/secrets.h`. POSTs also need an `X-Requested-With` header (the page sends it; it stops a
+foreign web page from using your cached login). The server runs in the network task between the weather/alert fetches
+(an HTTP request never overlaps a TLS handshake; a page load may wait a few seconds while a fetch runs). It stops while the
+Wi-Fi setup portal is open (port 80) and during OTA, and comes back by itself.
+
+| Endpoint | |
+|---|---|
+| `GET /api/status` | JSON: firmware build + SDK, uptime, heap free/largest, Wi-Fi SSID/RSSI/IP, device time + source + TZ, light sensor (smoothed raw, level, applied backlight), screen, brush last seen / last session, weather and alert state |
+| `GET /api/settings`, `POST /api/settings` | form-urlencoded; any subset of the keys below; 400 `{"error":...}` on a bad value (nothing is applied) |
+| `POST /api/time` | `epoch=<UTC seconds>` or `local=YYYY-MM-DDTHH:MM[:SS]` (read in the device's time zone, DST-aware); sets the clock, source `manual` |
+| `POST /api/reboot` | saves the time, restarts |
+| `POST /api/portal` | opens the Wi-Fi setup portal (same as holding BOOT) |
+
+Settings (NVS namespace `cfg`, defaults = `config.h`, applied live): `lat`, `lon`, `loc` (display name only), `region` (alert region
+id), `tz` (POSIX TZ string), `night_start`, `night_end`, `night_wake` (s), `ldr_bright`, `ldr_dark`, `bl_min`, `bl_max`,
+`led_max`, `show_weather`, `show_alert`, `show_zones` (0/1). Night with `night_start == night_end` never happens. A new
+location or region invalidates the old data and refetches at once; a disabled alert stops polling; a disabled widget draws
+as its "no data" state (weather/alert hidden, plain brushing screen without the teeth chart; the zone tracking itself keeps
+running). The `config.h` values are only the defaults.
+
+**Time without internet.** Source levels: `none < restored < rtc < manual < ntp`, shown in `/api/status`.
+* At boot, before Wi-Fi: if the system time is valid (the IDF keeps it across software resets: RTC timer plus the boot-time
+  offset in RTC store registers) it is kept, source `rtc`; otherwise the epoch last saved in NVS is restored (so the clock is
+  behind by the power-off time), source `restored`. A system time more than a day behind the saved one is distrusted.
+* The clock, night mode and the weather day/night icon work on any source. Weather and alerts still need Wi-Fi.
+* NTP keeps syncing while Wi-Fi is up; every sync (also the hourly ones) sets source `ntp`. A manual set (`POST /api/time`) is
+  source `manual` until the next NTP sync.
+* The epoch is saved to NVS (one 8-byte key `cfg/epoch`) after every NTP sync, after a manual set, every 10 minutes, and before
+  each intentional restart (portal save, heap safety restart, reboot endpoint, OTA end).
+* The RGB LED never signalled a missing NTP sync (it has no time input), so it is unchanged.
 
 ## Zones
 
@@ -186,6 +221,7 @@ lib/core/                     plain C++17, no Arduino: protocol, session, imu (f
 test/test_core/               Unity tests (native)
 test/data/                    io8_session.txt (real capture), zones_golden.txt (Python reference vectors)
 tools/gen_model_header.py     zone_model.json -> C++ header
+tools/web/index.html          web UI page; `uv run python tools/gen_web.py` gzips it into include/web_page.h
 tools/make_golden.py          Python -> golden fixture:  uv run --project tools/python python tools/make_golden.py
 tools/design/                 design.py (pixel design source of truth; gen/golden/mock), OFL.txt, Press Start 2P font
 tools/python/                 Python PoC: live console display, zone recorder/trainer (uv project)

@@ -11,5 +11,9 @@ void diag_printf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 
 // Ring access for the telnet server (thread safe)
 uint32_t diag_ring_oldest();
+
+// Why the firmware restarted itself: kept in RTC memory across the software reset, logged at the next boot.
+void diag_note_restart(const char* why);
+const char* diag_take_restart_note();  // the note left by the previous run ("" if none); clears it
 // next line for a reader cursor: length, or -1 if nothing new; *skipped = lines the reader missed
 int diag_ring_next(uint32_t& cursor, char* out, size_t cap, uint32_t* skipped);

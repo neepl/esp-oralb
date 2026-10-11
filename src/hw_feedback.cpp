@@ -11,6 +11,7 @@ namespace {
 constexpr int LED_FREQ = 5000;
 const uint8_t LED_PINS[3] = {BOARD_LED_R, BOARD_LED_G, BOARD_LED_B};
 constexpr int LED_OFF_LEVEL = LED_ACTIVE_LOW ? HIGH : LOW;
+volatile int led_max = LED_MAX;
 
 }  // namespace
 
@@ -27,10 +28,12 @@ void led_begin() {
   led_set({0, 0, 0});
 }
 
+void led_set_max(int max) { led_max = max < 0 ? 0 : (max > 255 ? 255 : max); }
+
 void led_set(Rgb c) {
   const uint8_t v[3] = {c.r, c.g, c.b};
   for (int i = 0; i < 3; i++) {
-    int level = v[i] * LED_MAX / 255;
+    int level = v[i] * led_max / 255;
     ledcWrite(LED_PINS[i], LED_ACTIVE_LOW ? 255 - level : level);
   }
 }

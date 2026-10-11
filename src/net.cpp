@@ -14,6 +14,9 @@
 #include "diag.h"
 #include "isrg_root_x1.h"
 #include "netsvc.h"
+#include "settings_store.h"
+#include "timekeep.h"
+#include "web.h"
 
 namespace {
 
@@ -27,6 +30,20 @@ bool weather_have = false;           // a fetch has succeeded at least once
 oralb::WeatherData weather_data;
 uint32_t weather_fetched_ms = 0;     // millis() of the last successful fetch
 volatile bool weather_last_ok = false;  // result of the most recent attempt
+volatile int weather_last_code = 0;     // HTTP status of the most recent attempt (<= 0: transport/parse error)
+volatile bool weather_refetch = false;  // settings changed: fetch again at once (clock screen)
+volatile bool alert_refetch = false;
+
+// SNTP sync callback (lwIP tcpip task): only flags; the network task saves the time to NVS.
+void on_sntp_sync(struct timeval*) {
+  synced = true;
+  timekeep_ntp_synced();
+}
+
+void sntp_tz(char tz[48]) {
+  oralb::Settings c = settings_get();
+  memcpy(tz, c.tz, 48);
+}
 
 bool wait_sntp(uint32_t timeout_ms) {
   uint32_t t0 = millis();
@@ -52,7 +69,9 @@ bool wait_sntp(uint32_t timeout_ms) {
 // Wi-Fi is up: sync the clock, then switch it off again to leave RAM and radio time to BLE.
 [[maybe_unused]] bool sync_clock() {
   sntp_set_sync_status(SNTP_SYNC_STATUS_RESET);
-  configTzTime(TZ_POSIX, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
+  char tz[48];
+  sntp_tz(tz);
+  configTzTime(tz, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
   bool ok = wait_sntp(20000);
   DIAG("ntp %s", ok ? "synced" : "timeout");
   if (ok) synced = true;
@@ -69,10 +88,11 @@ bool fetch_weather() {  // heap-delta diagnostics (leak hunt)
 }
 bool fetch_weather_impl() {
   char url[200];
+  oralb::Settings cfg = settings_get();
   snprintf(url, sizeof url,
-           "http://api.open-meteo.com/v1/forecast?latitude=%.2f&longitude=%.2f&current=temperature_2m,weather_code,is_day"
+           "http://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,weather_code,is_day"
            "&daily=sunrise,sunset&timezone=auto&forecast_days=1",
-           (double)WEATHER_LAT, (double)WEATHER_LON);
+           (double)cfg.lat, (double)cfg.lon);
   WiFiClient client;
   HTTPClient http;
   http.setTimeout(8000);
@@ -82,6 +102,7 @@ bool fetch_weather_impl() {
     return false;
   }
   int status = http.GET();
+  weather_last_code = status;
   bool ok = false;
   if (status == 200) {
     String body = http.getString();
@@ -111,6 +132,7 @@ bool alert_have = false;
 oralb::AlertLevel alert_level = oralb::AlertLevel::UNKNOWN;
 char alert_since[8] = "";
 uint32_t alert_ok_ms = 0;  // millis() of the last successful poll
+volatile int alert_last_code = 0;  // HTTP status of the latest poll (-1 transport error, -1000 bad reply, 0 none yet)
 
 const char* alert_name(oralb::AlertLevel l) {
   return l == oralb::AlertLevel::RED ? "red" : (l == oralb::AlertLevel::YELLOW ? "yellow" : "none");
@@ -138,7 +160,9 @@ bool fetch_alert_impl() {
   http.setReuse(false);
   int code = -1;
   bool ok = false;
-  if (http.begin(client, "https://siren.pp.ua/api/v3/alerts/" ALERT_REGION_ID)) {
+  char url[80];
+  snprintf(url, sizeof url, "https://siren.pp.ua/api/v3/alerts/%s", settings_get().alert_region);
+  if (http.begin(client, url)) {
     http.addHeader("accept", "application/json");
     code = http.GET();
     if (code == 200) {
@@ -167,6 +191,7 @@ bool fetch_alert_impl() {
       }
     }
   }
+  alert_last_code = code;
   if (!ok) {
     char tls[96] = "";
     int tls_err = client.lastError(tls, sizeof tls);  // mbedTLS reason behind HTTPClient's generic -1
@@ -194,6 +219,7 @@ bool fetch_alert_impl() {
 // The setup portal (blue LED). With a timeout of 0 it stays open until a network is saved.
 // Saved credentials are kept unless the user enters new ones.
 bool run_portal(int timeout_s) {
+  web_stop();  // the portal needs port 80
   WiFiManager wm;
   wm.setDebugOutput(false);
   wm.setConfigPortalTimeout(timeout_s);
@@ -209,6 +235,8 @@ bool run_portal(int timeout_s) {
     // a clean boot), and the BLE link needs headroom: restart with the new network.
     DIAG("wifi: restarting with the new network");
     vTaskDelay(pdMS_TO_TICKS(500));
+    diag_note_restart("new Wi-Fi network");
+    timekeep_save_now();
     ESP.restart();
   }
   ble_pause(false);
@@ -302,7 +330,9 @@ void net_task_always_on() {
     bool connected = connect_or_setup();  // default modem sleep stays on (needed for BLE coexistence)
     if (connected) {
       sntp_set_sync_status(SNTP_SYNC_STATUS_RESET);
-      configTzTime(TZ_POSIX, "pool.ntp.org", "time.google.com", "time.cloudflare.com");  // keeps syncing hourly
+      char tz[48];
+      sntp_tz(tz);
+      configTzTime(tz, "pool.ntp.org", "time.google.com", "time.cloudflare.com");  // keeps syncing hourly
       synced = wait_sntp(20000);
       DIAG("ntp %s", synced ? "synced" : "timeout (SNTP keeps trying)");
       fetch_weather();
@@ -312,10 +342,15 @@ void net_task_always_on() {
     last_weather = millis();
   }
   int quick_retries = 0;
-  uint32_t last_alert = 0;
+  uint32_t last_alert = 0, last_tick = 0;
   bool prev_clock = true, alert_now = true;
   for (;;) {
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    // The HTTP server runs in THIS task, between fetches: a request and a TLS handshake never overlap in memory.
+    vTaskDelay(pdMS_TO_TICKS(10));
+    web_poll();
+    timekeep_tick();
+    if (millis() - last_tick < 1000) continue;  // the rest runs once a second
+    last_tick = millis();
     handle_portal_request();
     uint32_t ms = millis();
     if (WiFi.status() != WL_CONNECTED) {
@@ -332,6 +367,7 @@ void net_task_always_on() {
       synced = true;
       DIAG("ntp synced");
     }
+    const oralb::Settings cfg = settings_get();
     if (synced) state = NetState::SYNCED;
     // No fetches during a firmware update: a TLS handshake every 15 s stalled the OTA transfer
     // ("ota: error 4" at 60%) and every 30 s update overlapped one.
@@ -343,13 +379,17 @@ void net_task_always_on() {
     }
     if (clock_screen && !prev_clock) alert_now = true;  // back on the clock after a session: poll right away
     prev_clock = clock_screen;
-    if (clock_screen && synced && (alert_now || ms - last_alert >= ALERT_POLL_S * 1000UL)) {  // TLS needs a valid clock
+    // (No clock gate: certificate dates are not checked in this mbedTLS config, so any time source will do.)
+    if (clock_screen && cfg.show_alert && (alert_now || alert_refetch || ms - last_alert >= ALERT_POLL_S * 1000UL)) {
       alert_now = false;
+      alert_refetch = false;
       fetch_alert();
       last_alert = millis();
     }
     uint32_t retry_ms = quick_retries < QUICK_RETRY_COUNT ? QUICK_RETRY_MS : NTP_RETRY_MS;
-    if (clock_screen && ms - last_weather >= (weather_last_ok ? WEATHER_REFRESH_MIN * 60000UL : retry_ms)) {
+    if (clock_screen && cfg.show_weather &&
+        (weather_refetch || ms - last_weather >= (weather_last_ok ? WEATHER_REFRESH_MIN * 60000UL : retry_ms))) {
+      weather_refetch = false;
       fetch_weather();
       last_weather = millis();
       quick_retries = weather_last_ok ? 0 : quick_retries + 1;
@@ -360,6 +400,7 @@ void net_task_always_on() {
 
 void net_task(void*) {
   WiFi.onEvent(log_wifi_event);
+  sntp_set_time_sync_notification_cb(on_sntp_sync);
 #if WIFI_ALWAYS_ON
   net_task_always_on();
 #else
@@ -369,9 +410,36 @@ void net_task(void*) {
 
 }  // namespace
 
-void net_begin() { xTaskCreatePinnedToCore(net_task, "net", 10240, nullptr, 1, nullptr, 1); }
+void net_begin() { xTaskCreatePinnedToCore(net_task, "net", 12288, nullptr, 1, nullptr, 1); }
 NetState net_state() { return state; }
-bool net_time_valid() { return synced && time(nullptr) > 1700000000; }
+// Displayable once any source has set the clock (restored / rtc / manual / ntp), not only after NTP.
+bool net_time_valid() { return timekeep_source() != oralb::TimeSource::NONE && time(nullptr) > oralb::EPOCH_MIN_VALID; }
+bool net_ntp_synced() { return synced; }
+int net_weather_last_code() { return weather_last_code; }
+bool net_weather_last_ok() { return weather_last_ok; }
+int net_alert_last_code() { return alert_last_code; }
+
+// Called by the web handler (this task) after new settings were committed.
+void net_on_settings(const oralb::Settings& o, const oralb::Settings& n) {
+  if (o.lat != n.lat || o.lon != n.lon) {  // old location's data must not stay on screen
+    portENTER_CRITICAL(&weather_mux);
+    weather_have = false;
+    portEXIT_CRITICAL(&weather_mux);
+    weather_refetch = true;
+  }
+  if (!o.show_weather && n.show_weather) weather_refetch = true;
+  if (strcmp(o.alert_region, n.alert_region) != 0) {
+    portENTER_CRITICAL(&alert_mux);
+    alert_have = false;
+    portEXIT_CRITICAL(&alert_mux);
+    alert_refetch = true;
+  }
+  if (!o.show_alert && n.show_alert) alert_refetch = true;
+  if (strcmp(o.tz, n.tz) != 0) {
+    setenv("TZ", n.tz, 1);
+    tzset();
+  }
+}
 
 void net_request_portal() { portal_requested = true; }
 

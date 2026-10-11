@@ -18,6 +18,8 @@ struct AppState {
   volatile bool ota_active = false;  // firmware update in progress: main loop shows the update screen
   volatile int ota_pct = 0;          // progress, set by the OTA callbacks (they never draw themselves)
   volatile uint32_t ota_error_ms = 0;  // millis() of a failed update (error shown for 3 s), 0 = none
+  // Published by loop() for the web status page (plain ints: a stale read is harmless)
+  volatile int ldr_avg = 0, ldr_level = 0, backlight = 0;
 };
 
 extern AppState app;

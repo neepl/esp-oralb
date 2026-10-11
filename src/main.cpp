@@ -7,8 +7,11 @@
 #include "config.h"
 #include "diag.h"
 #include "feedback.h"
+#include "settings.h"
 #include "hw_feedback.h"
 #include "net.h"
+#include "settings_store.h"
+#include "timekeep.h"
 #include "gfx_assets.h"
 #include "ui.h"
 
@@ -28,6 +31,18 @@ bool was_ota = false;
 GoalTracker goal;
 BacklightControl ldr_ctl(LDR_BRIGHT_RAW, LDR_DARK_RAW, BACKLIGHT_MIN, BACKLIGHT_MAX);
 int ldr_level = BACKLIGHT_MAX;
+Settings cfg;  // copy of the live settings, refreshed when settings_generation() changes
+uint32_t cfg_gen = 0;
+
+// Picks up web-UI changes: calibration, LED cap; everything else is read from `cfg` where it is used.
+void refresh_settings() {
+  uint32_t g = settings_generation();
+  if (g == cfg_gen) return;
+  cfg_gen = g;
+  cfg = settings_get();
+  ldr_ctl.set_params(cfg.ldr_bright, cfg.ldr_dark, cfg.bl_min, cfg.bl_max);
+  led_set_max(cfg.led_max);
+}
 uint32_t last_ldr_ms = 0, last_ldr_log_ms = 0;
 
 void build_scene(Scene& s, double now, uint32_t ms) {
@@ -44,10 +59,10 @@ void build_scene(Scene& s, double now, uint32_t ms) {
     s.secs = se.brush_seconds;
     s.high_pressure = se.has_frame && se.frame.high_pressure() && se.frame.running();
     s.blink_on = (ms / 500) % 2 == 0;  // 1 Hz blink of the current progress square
-    s.zones = app.zones_linked || tr.samples > 0;
+    s.zones = cfg.show_zones && (app.zones_linked || tr.samples > 0);
   } else if (se.screen == Screen::RESULT) {
     s.secs = se.last.seconds;
-    s.zones = tr.samples > 0;  // coverage of the session that just ended (reset when the next starts)
+    s.zones = cfg.show_zones && tr.samples > 0;  // coverage of the session that just ended (reset when the next starts)
   }
   if (s.zones) {
     s.current_zone = se.screen == Screen::BRUSHING ? (int8_t)tr.current : -1;
@@ -68,7 +83,7 @@ void build_scene(Scene& s, double now, uint32_t ms) {
     }
     WeatherData wd;
     uint32_t age_ms;
-    if (net_weather(wd, age_ms) && age_ms <= WEATHER_MAX_AGE_MIN * 60000UL) {  // stale weather is hidden
+    if (cfg.show_weather && net_weather(wd, age_ms) && age_ms <= WEATHER_MAX_AGE_MIN * 60000UL) {  // stale weather is hidden
       time_t t = time(nullptr);
       struct tm lt;
       localtime_r(&t, &lt);
@@ -79,7 +94,7 @@ void build_scene(Scene& s, double now, uint32_t ms) {
     AlertLevel al;
     char since[8];
     uint32_t alert_age_ms;
-    if (net_alert(al, since, alert_age_ms) && alert_age_ms <= ALERT_MAX_AGE_S * 1000UL) {  // stale: hidden
+    if (cfg.show_alert && net_alert(al, since, alert_age_ms) && alert_age_ms <= ALERT_MAX_AGE_S * 1000UL) {  // stale: hidden
       s.alert = al;
       strncpy(s.alert_since, since, sizeof s.alert_since - 1);
     }
@@ -93,7 +108,7 @@ bool is_night() {
   time_t t = time(nullptr);
   struct tm tmv;
   localtime_r(&t, &tmv);
-  return tmv.tm_hour >= NIGHT_START_H || tmv.tm_hour < NIGHT_END_H;
+  return is_night_hour(tmv.tm_hour, cfg.night_start, cfg.night_end);
 }
 
 void set_backlight(uint8_t b) {
@@ -101,6 +116,7 @@ void set_backlight(uint8_t b) {
     brightness = b;
     ui_set_brightness(b);
   }
+  app.backlight = b;
 }
 
 void handle_touch(uint32_t ms) {
@@ -136,6 +152,8 @@ void handle_button(uint32_t ms) {
 void setup() {
   diag_install();  // capture ESP-IDF log lines into the telnet ring too
   led_early_off();  // LED pins off before anything else
+  settings_begin();  // NVS settings (web UI); before anything that uses them
+  refresh_settings();
   pinMode(BOARD_BOOT_BTN, INPUT_PULLUP);
   Serial.begin(115200);
   led_begin();
@@ -151,12 +169,18 @@ void setup() {
   app.mtx = xSemaphoreCreateMutex();  // before any callback can fire
   ui_begin();                         // allocate the sprite first, while the heap is unfragmented
   ui_message("esp-oralb", "starting...");
-  setenv("TZ", TZ_POSIX, 1);
+  setenv("TZ", cfg.tz, 1);
   tzset();
+  timekeep_boot();  // keep the RTC-held time or restore the saved one, before Wi-Fi/NTP
   ble_begin();
   net_begin();
   last_activity_ms = millis();
-  DIAG("boot: free heap %u, largest block %u", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
+  static const char* const RESET_NAMES[] = {"unknown", "power-on", "external", "software", "panic", "int-watchdog",
+                                            "task-watchdog", "watchdog", "deep-sleep", "brownout", "sdio"};
+  unsigned rr = (unsigned)esp_reset_reason();
+  const char* note = diag_take_restart_note();
+  DIAG("boot: reset %s%s%s, free heap %u, largest block %u", rr < 11 ? RESET_NAMES[rr] : "other", *note ? " - " : "",
+       note, (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
 }
 
 void loop() {
@@ -188,6 +212,7 @@ void loop() {
     was_ota = false;
     drawn_once = false;  // redraw after a failed update
   }
+  refresh_settings();
   double now = now_s();
   bool active;
   {
@@ -224,7 +249,9 @@ void loop() {
     else if (ms - low_since > HEAP_RESTART_LOW_MS) {
       DIAG("heap: largest block %u < %u for %u s while idle -> restart", (unsigned)ESP.getMaxAllocHeap(),
            (unsigned)HEAP_RESTART_BELOW, (unsigned)(HEAP_RESTART_LOW_MS / 1000));
+      diag_note_restart("heap safety");
       delay(200);
+      timekeep_save_now();
       ESP.restart();
     }
   }
@@ -234,6 +261,8 @@ void loop() {
   if (ms - last_ldr_ms >= LDR_SAMPLE_MS) {
     last_ldr_ms = ms;
     ldr_level = ldr_ctl.update(ldr_read());
+    app.ldr_avg = (int)(ldr_ctl.average() + 0.5f);
+    app.ldr_level = ldr_level;
     static int logged_level = -1;  // log changes only (keeps the small telnet ring for real events)
     if (ldr_level != logged_level && ms - last_ldr_log_ms >= 10000) {
       last_ldr_log_ms = ms;
@@ -245,7 +274,7 @@ void loop() {
   uint32_t idle_ms = ms - last_activity_ms;
   // Night: off when idle for NIGHT_WAKE_S (a touch re-arms last_activity_ms; brushing/result keeps it on).
   // Otherwise the sensor level, with no idle dimming.
-  set_backlight(night && !active && idle_ms > NIGHT_WAKE_S * 1000UL ? 0 : (uint8_t)ldr_level);
+  set_backlight(night && !active && idle_ms > (uint32_t)cfg.night_wake_s * 1000UL ? 0 : (uint8_t)ldr_level);
 
   // Goal event (2:00): the LED blinks green
   LedInput li;

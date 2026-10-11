@@ -11,6 +11,7 @@
 #include "ble.h"
 #include "config.h"
 #include "diag.h"
+#include "timekeep.h"
 #include "ui.h"
 
 #if __has_include("secrets.h")
@@ -139,7 +140,11 @@ void ota_begin() {
     last_pct = pct;
     app.ota_pct = pct;
   });
-  ArduinoOTA.onEnd([]() { DIAG("ota: done, rebooting"); });
+  ArduinoOTA.onEnd([]() {
+    DIAG("ota: done, rebooting");
+    diag_note_restart("OTA update");
+    timekeep_save_now();  // the update reboots right after this callback
+  });
   ArduinoOTA.onError([](ota_error_t e) {
     DIAG("ota: error %u", (unsigned)e);
     app.ota_error_ms = millis();  // the main loop shows the error for 3 s, then resumes

@@ -56,6 +56,10 @@ class BacklightControl {
       : bright_(bright_raw), dark_(dark_raw), min_(bl_min), max_(bl_max), alpha_(alpha), deadband_(deadband),
         max_step_(max_step) {}
   int update(int raw);  // returns the backlight level to use
+  // New calibration (web settings); keeps the smoothed average and level, which slew to the new target.
+  void set_params(int bright_raw, int dark_raw, int bl_min, int bl_max) {
+    bright_ = bright_raw; dark_ = dark_raw; min_ = bl_min; max_ = bl_max;
+  }
   float average() const { return avg_; }
   int level() const { return level_; }
 
