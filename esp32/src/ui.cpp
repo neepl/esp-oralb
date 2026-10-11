@@ -9,6 +9,7 @@
 
 #include "board.h"
 #include "config.h"
+#include "touch.h"
 
 using namespace oralb;
 
@@ -16,7 +17,6 @@ class LGFX : public lgfx::LGFX_Device {
   lgfx::Panel_ILI9341 panel_;
   lgfx::Bus_SPI bus_;
   lgfx::Light_PWM light_;
-  lgfx::Touch_CST816S touch_;
 
  public:
   LGFX() {
@@ -62,24 +62,6 @@ class LGFX : public lgfx::LGFX_Device {
       light_.config(c);
       panel_.setLight(&light_);
     }
-    {
-      auto c = touch_.config();
-      c.x_min = 0;
-      c.x_max = SCREEN_W - 1;
-      c.y_min = 0;
-      c.y_max = SCREEN_H - 1;
-      c.pin_int = BOARD_TOUCH_INT;
-      c.pin_rst = BOARD_TOUCH_RST;
-      c.bus_shared = false;
-      c.offset_rotation = 0;
-      c.i2c_port = 0;
-      c.i2c_addr = BOARD_TOUCH_ADDR;
-      c.pin_sda = BOARD_TOUCH_SDA;
-      c.pin_scl = BOARD_TOUCH_SCL;
-      c.freq = 400000;
-      touch_.config(c);
-      panel_.setTouch(&touch_);
-    }
     setPanel(&panel_);
   }
 };
@@ -119,6 +101,7 @@ struct LcdCanvas : oralb::Canvas {
 void ui_begin() {
   lcd.init();
   lcd.setRotation(DISPLAY_ROTATION);  // touch follows (LovyanGFX rotates both)
+  touch_begin();  // own CST816S reader (see touch.h); no coordinates needed
   lcd.fillScreen(0);
   band.setColorDepth(16);
   band.setPsram(false);
@@ -128,10 +111,7 @@ void ui_begin() {
 
 void ui_set_brightness(uint8_t level) { lcd.setBrightness(level); }
 
-bool ui_touch_down() {
-  lgfx::touch_point_t tp;
-  return lcd.getTouchRaw(&tp, 1) > 0;
-}
+bool ui_touch_down() { return touch_down(); }
 
 void ui_render(const oralb::Scene& s) {
   BandCanvas c(band);

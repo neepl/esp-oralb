@@ -156,7 +156,7 @@ void setup() {
   ble_begin();
   net_begin();
   last_activity_ms = millis();
-  DIAG("boot: free heap %u, largest block %u", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+  DIAG("boot: free heap %u, largest block %u", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
 }
 
 void loop() {
@@ -209,7 +209,7 @@ void loop() {
   }
   if (ms - last_heap_log_ms >= 60000) {
     last_heap_log_ms = ms;
-    DIAG("heap free %u largest %u", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+    DIAG("heap free %u largest %u", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
   }
   if (active) last_activity_ms = ms;
   // Heap safety net: BLE sessions and TLS fetches slowly fragment the heap until the TLS buffers no longer
@@ -222,7 +222,7 @@ void loop() {
     if (!low) low_since = 0;
     else if (!low_since) low_since = ms;
     else if (ms - low_since > HEAP_RESTART_LOW_MS) {
-      DIAG("heap: largest block %u < %u for %u s while idle -> restart", ESP.getMaxAllocHeap(),
+      DIAG("heap: largest block %u < %u for %u s while idle -> restart", (unsigned)ESP.getMaxAllocHeap(),
            (unsigned)HEAP_RESTART_BELOW, (unsigned)(HEAP_RESTART_LOW_MS / 1000));
       delay(200);
       ESP.restart();

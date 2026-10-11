@@ -154,7 +154,7 @@ void svc_task(void*) {
   MDNS.addService("telnet", "tcp", TELNET_PORT);
   telnet_begin();
   DIAG("net: services up: %s.local, telnet %d, OTA", HOSTNAME, TELNET_PORT);
-  DIAG("heap free %u largest %u", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+  DIAG("heap free %u largest %u", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
   for (;;) {
     ArduinoOTA.handle();
     telnet_pump();

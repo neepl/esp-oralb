@@ -40,7 +40,7 @@ bool wait_sntp(uint32_t timeout_ms) {
 [[maybe_unused]] void wifi_off() {
   // Order matters on Arduino-ESP32 2.0.x: stop the AP (portal) and STA first, give the event
   // loop time to drain, then de-init; otherwise "wifi:timeout when WiFi un-init" is logged.
-  sntp_stop();
+  esp_sntp_stop();
   WiFi.softAPdisconnect(true);
   WiFi.disconnect(true, false);
   vTaskDelay(pdMS_TO_TICKS(300));
@@ -64,7 +64,7 @@ bool fetch_weather_impl();
 bool fetch_weather() {  // heap-delta diagnostics (leak hunt)
   uint32_t h0 = ESP.getFreeHeap();
   bool ok = fetch_weather_impl();
-  DIAG("weather: heap %u -> %u (%+d)", h0, ESP.getFreeHeap(), (int)ESP.getFreeHeap() - (int)h0);
+  DIAG("weather: heap %u -> %u (%+d)", (unsigned)h0, (unsigned)ESP.getFreeHeap(), (int)ESP.getFreeHeap() - (int)h0);
   return ok;
 }
 bool fetch_weather_impl() {
@@ -122,7 +122,7 @@ bool fetch_alert() {  // heap-delta diagnostics around the real fetch (leak hunt
   uint32_t h0 = ESP.getFreeHeap();
   bool ok = fetch_alert_impl();
   static uint32_t n = 0;
-  if (++n % 4 == 0) DIAG("alert: heap %u -> %u (%+d)", h0, ESP.getFreeHeap(), (int)ESP.getFreeHeap() - (int)h0);
+  if (++n % 4 == 0) DIAG("alert: heap %u -> %u (%+d)", (unsigned)h0, (unsigned)ESP.getFreeHeap(), (int)ESP.getFreeHeap() - (int)h0);
   return ok;
 }
 bool fetch_alert_impl() {
@@ -170,8 +170,8 @@ bool fetch_alert_impl() {
   if (!ok) {
     char tls[96] = "";
     int tls_err = client.lastError(tls, sizeof tls);  // mbedTLS reason behind HTTPClient's generic -1
-    DIAG("alert: fetch failed (%d), tls %d %s, heap free %u largest %u", code, tls_err, tls, ESP.getFreeHeap(),
-         ESP.getMaxAllocHeap());
+    DIAG("alert: fetch failed (%d), tls %d %s, heap free %u largest %u", code, tls_err, tls, (unsigned)ESP.getFreeHeap(),
+         (unsigned)ESP.getMaxAllocHeap());
   }
   http.end();
   return ok;

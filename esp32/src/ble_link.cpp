@@ -240,7 +240,7 @@ void link_task(void*) {
     link_state.connected = true;
     // One client for the lifetime of the firmware (create/delete per session fragmented the heap).
     static NimBLEClient* c = NimBLEDevice::createClient();
-    c->setConnectTimeout(8);
+    c->setConnectTimeout(8000);  // NimBLE 2.x: milliseconds (was seconds)
     connect_once(c, addr, type);
     if (c->isConnected()) c->disconnect();
     link_state.connected = false;

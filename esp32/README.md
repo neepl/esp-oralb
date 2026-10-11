@@ -30,7 +30,7 @@ If the picture is mirrored/rotated or colours are swapped/inverted, override
 ## Build, test, flash
 
 ```
-pio run                  # build (PlatformIO Core 6.1+, platform espressif32@6.11.0 = Arduino-ESP32 2.0.17)
+pio run                  # build (PlatformIO Core 6.2+, pioarduino platform 55.03.312 = Arduino-ESP32 3.3.12 on ESP-IDF 5.5.5, mbedTLS 3.6.6)
 pio test -e native       # host unit tests (needs a C++ compiler: clang++/g++)
 pio run -t upload        # flash over USB (CH340)
 pio device monitor       # 115200 baud
@@ -40,7 +40,7 @@ The board enumerates through a CH340 USB-serial chip. macOS 12+ and Linux have a
 on older macOS or on Windows install the WCH CH34x driver. If the upload cannot sync, hold BOOT
 while it connects. Partition table: `min_spiffs` (two 1.9 MB app slots, needed for OTA; the firmware is ~1.3 MB).
 
-Pinned libraries: LovyanGFX 1.2.7, NimBLE-Arduino 1.4.3, WiFiManager 2.0.17.
+Pinned libraries: LovyanGFX 1.2.28, NimBLE-Arduino 2.5.1, WiFiManager 2.0.17 (its one format warning is in the library). ESP-IDF 5 uses the TLSF heap allocator, which does not fragment over time like IDF 4.4. `lib_ignore = Wire` keeps LovyanGFX from linking the IDF I2C driver (IRAM overflow); touch is read by the bit-banged `src/touch.cpp`. `custom_sdkconfig` in `platformio.ini` shrinks the mbedTLS send buffer to 4 KB with dynamic buffers (the alert TLS fetch ran out of heap otherwise); it makes PlatformIO rebuild the framework libraries (~2 min on a clean build) and needs the partition table as a local file (`min_spiffs.csv`).
 
 ## First boot / Wi-Fi
 
