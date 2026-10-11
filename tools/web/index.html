@@ -11,7 +11,7 @@ h1{font-size:20px;margin:8px 0}h2{font-size:13px;letter-spacing:.08em;text-trans
 section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:12px 0}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px}.kv span:nth-child(odd){color:var(--dim)}.kv span:nth-child(even){text-align:right;word-break:break-all}
 label{display:block;margin:8px 0 2px;color:var(--dim);font-size:13px}
-input[type=text],input[type=number],input[type=datetime-local]{width:100%;padding:8px;background:#0d1015;border:1px solid var(--line);border-radius:6px;color:var(--fg);font:inherit}
+input[type=text],input[type=number],input[type=datetime-local],select{width:100%;padding:8px;background:#0d1015;border:1px solid var(--line);border-radius:6px;color:var(--fg);font:inherit}
 .row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1 1 140px}
 .chk{display:flex;align-items:center;gap:8px;color:var(--fg);margin:6px 0}
 button{padding:9px 14px;border:0;border-radius:6px;background:var(--acc);color:#05202a;font:inherit;font-weight:600;cursor:pointer}
@@ -45,9 +45,10 @@ const F=[['lat','Latitude','number','step="0.0001" min="-90" max="90"'],['lon','
 ['ldr_bright','Light sensor: bright reading','number','min="0" max="4095"'],['ldr_dark','Light sensor: dark reading','number','min="0" max="4095"'],
 ['bl_min','Backlight min','number','min="0" max="255"'],['bl_max','Backlight max','number','min="0" max="255"'],
 ['led_max','LED max brightness','number','min="0" max="255"'],
+['lang','Display language','sel',['uk','Ukrainian (default)'],['en','English']],
 ['show_weather','Show weather','chk'],['show_alert','Show air-raid alert','chk'],['show_zones','Show zone map','chk']];
 let h='';
-for(const [k,l,t,a] of F)h+=t=='chk'?`<label class="chk"><input type="checkbox" name="${k}">${l}</label>`:`<label for="s_${k}">${l}</label><input id="s_${k}" name="${k}" type="${t}" ${a}${t=='number'?' inputmode="decimal"':''}>`;
+for(const [k,l,t,a,...o] of F)h+=t=='sel'?`<label for="s_${k}">${l}</label><select id="s_${k}" name="${k}">${[a,...o].map(([v,n])=>`<option value="${v}">${n}</option>`).join('')}</select>`:t=='chk'?`<label class="chk"><input type="checkbox" name="${k}">${l}</label>`:`<label for="s_${k}">${l}</label><input id="s_${k}" name="${k}" type="${t}" ${a}${t=='number'?' inputmode="decimal"':''}>`;
 $('f').innerHTML=h;
 function msg(t,e){const m=$('msg');m.textContent=t;m.className=e?'err':'';m.style.display='block';clearTimeout(msg.t);msg.t=setTimeout(()=>m.style.display='none',3500)}
 async function api(p,body){

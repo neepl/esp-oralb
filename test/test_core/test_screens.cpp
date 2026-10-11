@@ -75,6 +75,16 @@ static void test_clock() {
   expect_match("clock", s);
 }
 
+static void test_clock_date_short() {  // "П’ятниця, 27 листопада" is 352 px: the weekday is shortened to fit
+  Scene s;
+  s.screen = Screen::CLOCK;
+  s.time_valid = true;
+  s.hh = 7; s.mm = 42; s.weekday = 4; s.day = 27; s.month = 11;
+  s.weather_valid = true; s.weather = Icon::PARTLY; s.temp = 12;
+  s.alert = AlertLevel::NONE;
+  expect_match("clock_date_short", s);
+}
+
 static void test_clock_colon_blink() {
   Scene s;
   s.screen = Screen::CLOCK;
@@ -178,6 +188,38 @@ static void test_clock_alerts() {
   expect_match("clock_alert_unknown", u);
 }
 
+static void test_english() {
+  Scene s;
+  clock_scene(s, 7, 42, Icon::PARTLY, 12, AlertLevel::NONE, "");
+  s.lang = 1;
+  expect_match("en_clock", s);
+  Scene r;
+  clock_scene(r, 20, 52, Icon::PARTLY_NIGHT, 13, AlertLevel::RED, "20:49");
+  r.lang = 1;
+  expect_match("en_clock_alert_red", r);
+  Scene y;
+  clock_scene(y, 20, 47, Icon::PARTLY_NIGHT, 13, AlertLevel::YELLOW, "20:30");
+  y.weekday = 2; y.day = 30; y.month = 9;  // Wed, 30 September: the longest English date line
+  y.lang = 1;
+  expect_match("en_clock_alert_yellow", y);
+  Scene b;
+  b.screen = Screen::BRUSHING; b.secs = 83; b.zones = true; b.current_zone = zone_index("UIL"); b.lang = 1;
+  demo_cov(b, 0.38);
+  expect_match("en_brushing", b);
+  Scene p;
+  p.screen = Screen::BRUSHING; p.secs = 47; p.zones = true; p.high_pressure = true; p.current_zone = zone_index("UOR"); p.lang = 1;
+  demo_cov(p, 0.2);
+  expect_match("en_pressure", p);
+  Scene g;
+  g.screen = Screen::RESULT; g.secs = 134; g.zones = true; g.lang = 1;
+  demo_cov(g, 1.0);
+  expect_match("en_result_good", g);
+  Scene sh;
+  sh.screen = Screen::RESULT; sh.secs = 52; sh.zones = true; sh.lang = 1;
+  demo_cov(sh, 0.4);
+  expect_match("en_result_short", sh);
+}
+
 static void test_clock_night_icons() {
   Scene s;
   s.screen = Screen::CLOCK;
@@ -279,9 +321,11 @@ static void test_day_night_decision() {
 
 void run_screen_tests() {
   RUN_TEST(test_clock);
+  RUN_TEST(test_clock_date_short);
   RUN_TEST(test_clock_colon_blink);
   RUN_TEST(test_clock_night_icons);
   RUN_TEST(test_clock_alerts);
+  RUN_TEST(test_english);
   RUN_TEST(test_brushing);
   RUN_TEST(test_pressure);
   RUN_TEST(test_result_good);

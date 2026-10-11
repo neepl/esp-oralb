@@ -20,6 +20,7 @@ static void test_defaults_match_config() {
   TEST_ASSERT_EQUAL_INT(8, s.night_wake_s);
   TEST_ASSERT_EQUAL_INT(LED_MAX, s.led_max);
   TEST_ASSERT_TRUE(s.show_weather && s.show_alert && s.show_zones);
+  TEST_ASSERT_EQUAL_INT(LANG_UK, s.lang);
   const char* e = nullptr;
   TEST_ASSERT_TRUE(settings_check(s, &e));
 }
@@ -42,6 +43,26 @@ static void test_settings_set_valid() {
   TEST_ASSERT_FALSE(s.show_alert);
   TEST_ASSERT_FALSE(s.show_zones);
   TEST_ASSERT_TRUE(s.show_weather);
+}
+
+static void test_settings_lang() {
+  Settings s = settings_defaults();
+  const char* e = nullptr;
+  TEST_ASSERT_TRUE(settings_set(s, "lang", "en", &e));
+  TEST_ASSERT_EQUAL_INT(LANG_EN, s.lang);
+  TEST_ASSERT_TRUE(settings_valid(s));
+  char json[640];
+  TEST_ASSERT_TRUE(settings_to_json(s, json, sizeof json));
+  TEST_ASSERT_NOT_NULL(strstr(json, "\"lang\":\"en\"}"));
+  TEST_ASSERT_TRUE(settings_set(s, "lang", "uk", &e));
+  TEST_ASSERT_EQUAL_INT(LANG_UK, s.lang);
+  TEST_ASSERT_TRUE(settings_to_json(s, json, sizeof json));
+  TEST_ASSERT_NOT_NULL(strstr(json, "\"lang\":\"uk\"}"));
+  const char* bad[] = {"", "EN", "de", "english", "1"};
+  for (const char* b : bad) TEST_ASSERT_FALSE_MESSAGE(settings_set(s, "lang", b, &e), b);
+  TEST_ASSERT_EQUAL_INT(LANG_UK, s.lang);  // unchanged by the rejected values
+  s.lang = 9;  // garbage byte from a corrupt blob
+  TEST_ASSERT_FALSE(settings_valid(s));
 }
 
 static void test_settings_set_invalid() {
@@ -106,7 +127,7 @@ static void test_settings_json() {
   TEST_ASSERT_TRUE(settings_to_json(s, json, sizeof json));
   TEST_ASSERT_NOT_NULL(strstr(json, "\"loc\":\"a\\\"b\\\\c\""));
   TEST_ASSERT_NOT_NULL(strstr(json, "\"lat\":50.4500"));
-  TEST_ASSERT_NOT_NULL(strstr(json, "\"show_zones\":true}"));
+  TEST_ASSERT_NOT_NULL(strstr(json, "\"show_zones\":true,\"lang\":\"uk\"}"));
   TEST_ASSERT_FALSE(settings_to_json(s, json, 40));  // too small: reported, still terminated
 }
 
@@ -193,6 +214,7 @@ void run_web_tests() {
   RUN_TEST(test_defaults_match_config);
   RUN_TEST(test_settings_set_valid);
   RUN_TEST(test_settings_set_invalid);
+  RUN_TEST(test_settings_lang);
   RUN_TEST(test_settings_valid);
   RUN_TEST(test_settings_check_cross);
   RUN_TEST(test_settings_keys_all_accepted);

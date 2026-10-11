@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "gfx_assets.h"
+#include "settings.h"
 
 namespace oralb {
 
@@ -123,7 +124,10 @@ void mmss(char* b, size_t n, int s) { snprintf(b, n, "%d:%02d", s / 60, s % 60);
 void clear(Canvas& c) { c.fill_rect(0, 0, c.width, c.height, C_BG); }
 
 // Bottom-right block: siren icon, state, since, city. UNKNOWN: hidden.
+const LangStrings& lang_of(const Scene& s) { return LANGS[s.lang < LANG_COUNT ? s.lang : 0]; }
+
 void draw_alert(Canvas& c, const Scene& s) {
+  const LangStrings& L = lang_of(s);
   if (s.alert == AlertLevel::UNKNOWN) return;
   bool none = s.alert == AlertLevel::NONE;
   // icon art, colour and label come from the generated ALERT_STYLES table (design.py)
@@ -135,17 +139,19 @@ void draw_alert(Canvas& c, const Scene& s) {
       if (ch != '.') c.fill_rect(196 + col * 3, 164 + r * 3, 3, 3, icon_color(ch, st.color));
     }
   bool full = !none && s.alert_since[0];
-  draw_text(c, st.label, 250, full ? 172 : 180, 1, st.label_dim ? C_DIM : st.color);
+  const char* label = s.alert == AlertLevel::RED ? L.alert_red : (s.alert == AlertLevel::YELLOW ? L.alert_yellow : L.alert_none);
+  draw_text(c, label, 250, full ? 172 : 180, 1, st.label_dim ? C_DIM : st.color);
   if (full) {
     char b[24];
-    snprintf(b, sizeof b, "%s %s", STR_SINCE, s.alert_since);
+    snprintf(b, sizeof b, "%s %s", L.since, s.alert_since);
     draw_text(c, b, 250, 186, 1, C_DIM);
   }
-  draw_text(c, STR_ALERT_CITY, 250, full ? 200 : 194, 1, C_DIM);
+  draw_text(c, L.alert_city, 250, full ? 200 : 194, 1, C_DIM);
 }
 
 void screen_clock(Canvas& c, const Scene& s) {
   clear(c);
+  const LangStrings& L = lang_of(s);
   char t[8];
   if (s.time_valid) snprintf(t, sizeof t, "%02d%c%02d", s.hh, s.colon ? ':' : ' ', s.mm);  // same width
   else snprintf(t, sizeof t, "--:--");
@@ -153,7 +159,10 @@ void screen_clock(Canvas& c, const Scene& s) {
   draw_big(c, t, (SCREEN_W - big_width(t, px)) / 2, 22, px, C_FG);
   if (s.time_valid) {
     char d[48];
-    snprintf(d, sizeof d, "%s, %d %s", DAYS[s.weekday % 7], s.day, MONTHS_GEN[(s.month + 11) % 12]);
+    const char* month = L.months[(s.month + 11) % 12];
+    snprintf(d, sizeof d, "%s, %d %s", L.days[s.weekday % 7], s.day, month);
+    if (text_width(d, 2) > DATE_MAX_W)  // e.g. "П’ятниця, 27 листопада" (352 px): short weekday instead
+      snprintf(d, sizeof d, "%s, %d %s", L.days_short[s.weekday % 7], s.day, month);
     draw_text_c(c, d, SCREEN_W / 2, 112, 2, C_FG);
   }
   if (s.weather_valid) {
@@ -168,6 +177,7 @@ void screen_clock(Canvas& c, const Scene& s) {
 
 void screen_brushing(Canvas& c, const Scene& s) {
   clear(c);
+  const LangStrings& L = lang_of(s);
   char t[16];
   mmss(t, sizeof t, s.secs);
   const int px = 11;
@@ -181,14 +191,15 @@ void screen_brushing(Canvas& c, const Scene& s) {
     int tw, th;
     teeth_size(cell, tw, th);
     draw_teeth(c, s, (SCREEN_W - tw) / 2, 100, cell, true);
-    draw_text(c, "\xD0\x9B", (SCREEN_W - tw) / 2 - 22, 100 + th / 2 - 4, 1, C_DIM);  // Л
-    draw_text(c, "\xD0\x9F", (SCREEN_W + tw) / 2 + 14, 100 + th / 2 - 4, 1, C_DIM);  // П
+    draw_text(c, L.side_l, (SCREEN_W - tw) / 2 - 22, 100 + th / 2 - 4, 1, C_DIM);  // Л
+    draw_text(c, L.side_r, (SCREEN_W + tw) / 2 + 14, 100 + th / 2 - 4, 1, C_DIM);  // П
   }
-  if (s.high_pressure) draw_text(c, STR_PRESSURE, 8, SCREEN_H - 16, 1, C_WARN);
+  if (s.high_pressure) draw_text(c, L.pressure, 8, SCREEN_H - 16, 1, C_WARN);
 }
 
 void screen_result(Canvas& c, const Scene& s) {
   clear(c);
+  const LangStrings& L = lang_of(s);
   bool ok = s.secs >= 120;
   char t[16];
   mmss(t, sizeof t, s.secs);
@@ -196,7 +207,7 @@ void screen_result(Canvas& c, const Scene& s) {
   // Without a teeth chart the face group (y 32..192) and the time are centred vertically.
   const int face_dy = s.zones ? 0 : (SCREEN_H - 160) / 2 - 32;
   draw_art(c, ok ? FACE_HAPPY : FACE_SAD, 8, 32 + face_dy, 8, C_ACCENT, false, 1);
-  draw_text_c(c, ok ? STR_GREAT : STR_SHORT, 8 + 64, 176 + face_dy, 2, ok ? C_ACCENT : C_DIM);
+  draw_text_c(c, ok ? L.result_great : L.result_short, 8 + 64, 176 + face_dy, 2, ok ? C_ACCENT : C_DIM);
   const int time_y = s.zones ? 18 : (SCREEN_H - 40) / 2;
   draw_big(c, t, 196 - big_width(t, px) / 2 + 30, time_y, px, C_FG);
   if (s.zones) {

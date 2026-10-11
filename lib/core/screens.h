@@ -35,6 +35,7 @@ struct Scene {
   int8_t temp = 0;
   AlertLevel alert = AlertLevel::UNKNOWN;  // air-raid state of the configured region (UNKNOWN = hidden)
   char alert_since[8] = "";   // "HH:MM" local, for YELLOW/RED
+  uint8_t lang = 0;           // display language index (Lang in settings.h): 0 uk, 1 en
   char status[48] = "";       // small UTF-8 line at the bottom of the clock screen
 };
 

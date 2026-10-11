@@ -6,6 +6,8 @@
 
 namespace oralb {
 
+enum Lang : uint8_t { LANG_UK = 0, LANG_EN = 1 };  // order = LANGS in gfx_assets.h
+
 struct Settings {
   float lat, lon;            // weather location
   char loc_name[24];         // display-only name of the location (UTF-8, up to 23 bytes)
@@ -15,6 +17,7 @@ struct Settings {
   int ldr_bright, ldr_dark, bl_min, bl_max;
   int led_max;
   bool show_weather, show_alert, show_zones;
+  uint8_t lang;              // display language: LANG_UK (default) or LANG_EN; "uk" / "en" in the API
 };
 
 Settings settings_defaults();  // values from config.h
@@ -29,6 +32,8 @@ bool settings_set(Settings& s, const char* key, const char* value, const char** 
 bool settings_check(const Settings& s, const char** err);
 // Every field passes settings_set() and settings_check() (used on the blob read back from NVS).
 bool settings_valid(const Settings& s);
+// Language code ("uk" / "en") of a Lang value.
+const char* lang_code(uint8_t lang);
 // Compact JSON object with every setting.
 bool settings_to_json(const Settings& s, char* buf, size_t cap);
 

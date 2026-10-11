@@ -490,27 +490,51 @@ constexpr TeethZone TEETH_ZONES[16] = {
     {"LCL", 2, {{1, 5}, {1, 6}, {0, 0}}},
 };
 
-// Ukrainian strings (UTF-8)
-constexpr const char* DAYS[7] = {"Понеділок", "Вівторок", "Середа", "Четвер", "П’ятниця", "Субота", "Неділя"};  // Monday first
-constexpr const char* MONTHS_GEN[12] = {"січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"};
-constexpr const char* STR_LAST = "Остання:";
-constexpr const char* STR_AT = "о";
-constexpr const char* STR_GREAT = "Чудово!";
-constexpr const char* STR_SHORT = "Замало";
-constexpr const char* STR_PRESSURE = "Тиснеш!";
-constexpr const char* STR_WAITING = "Чекаю щітку...";
-constexpr const char* STR_WIFI_SETUP = "Wi-Fi: esp-oralb-setup";
-constexpr const char* STR_ALERT_RED = "ТРИВОГА";
-constexpr const char* STR_ALERT_YELLOW = "ЗАГРОЗА";
-constexpr const char* STR_ALERT_NONE = "БЕЗПЕЧНО";
-constexpr const char* STR_ALERT_CITY = "Київ";
-constexpr const char* STR_SINCE = "з";
+// UI strings per language (UTF-8); index = Lang enum in settings.h (uk, en). Default: uk
+struct LangStrings {
+  const char* days[7];  // Monday first
+  const char* days_short[7];  // used when the full date line is wider than DATE_MAX_W
+  const char* months[12];
+  const char* last;
+  const char* at;
+  const char* result_great;
+  const char* result_short;
+  const char* pressure;
+  const char* waiting;
+  const char* wifi_setup;
+  const char* alert_red;
+  const char* alert_yellow;
+  const char* alert_none;
+  const char* alert_city;
+  const char* since;
+  const char* side_l;
+  const char* side_r;
+  const char* ota_busy;
+  const char* ota_error;
+};
+constexpr int LANG_COUNT = 2;
+constexpr int DATE_MAX_W = 304;
+constexpr LangStrings LANGS[LANG_COUNT] = {
+    {  // uk
+        {"Понеділок", "Вівторок", "Середа", "Четвер", "П’ятниця", "Субота", "Неділя"},
+        {"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"},
+        {"січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"},
+        "Остання:", "о", "Чудово!", "Замало", "Тиснеш!", "Чекаю щітку...", "Wi-Fi: esp-oralb-setup", "ТРИВОГА", "ЗАГРОЗА", "БЕЗПЕЧНО", "Київ", "з", "Л", "П", "Оновлення...", "Помилка оновлення",
+    },
+    {  // en
+        {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"},
+        {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"},
+        {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"},
+        "Last:", "at", "Great!", "Short!", "Too hard!", "Waiting for brush...", "Wi-Fi: join esp-oralb-setup", "ALERT", "THREAT", "SAFE", "Kyiv", "at", "L", "R", "Updating...", "Update failed",
+    },
+};
 
-struct AlertStyle { const char* const* art; uint32_t color; const char* label; bool label_dim; };
+// per-state alert icon + colour; the label is LangStrings::alert_red / alert_yellow / alert_none
+struct AlertStyle { const char* const* art; uint32_t color; bool label_dim; };
 constexpr AlertStyle ALERT_STYLES[3] = {  // red, yellow, none
-    {ALERT_ICON_RED, 0xEB463C, STR_ALERT_RED, false},
-    {ALERT_ICON_YELLOW, 0xF2C14E, STR_ALERT_YELLOW, false},
-    {ALERT_ICON_NONE, 0x5AAA6E, STR_ALERT_NONE, false},
+    {ALERT_ICON_RED, 0xEB463C, false},
+    {ALERT_ICON_YELLOW, 0xF2C14E, false},
+    {ALERT_ICON_NONE, 0x5AAA6E, false},
 };
 
 }  // namespace gfx

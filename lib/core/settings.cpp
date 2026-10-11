@@ -13,7 +13,7 @@ namespace oralb {
 
 const char* const SETTINGS_KEYS[] = {"lat",      "lon",      "loc",     "region",   "tz",       "night_start",
                                      "night_end", "night_wake", "ldr_bright", "ldr_dark", "bl_min", "bl_max",
-                                     "led_max",  "show_weather", "show_alert", "show_zones"};
+                                     "led_max",  "show_weather", "show_alert", "show_zones", "lang"};
 const int SETTINGS_KEY_COUNT = sizeof SETTINGS_KEYS / sizeof SETTINGS_KEYS[0];
 
 Settings settings_defaults() {
@@ -33,6 +33,7 @@ Settings settings_defaults() {
   s.bl_max = BACKLIGHT_MAX;
   s.led_max = LED_MAX;
   s.show_weather = s.show_alert = s.show_zones = true;
+  s.lang = LANG_UK;
   return s;
 }
 
@@ -134,7 +135,11 @@ bool settings_set(Settings& s, const char* k, const char* v, const char** err) {
   else if (!strcmp(k, "show_weather")) { if (!parse_bool(v, s.show_weather)) e = "show_weather: 0 or 1"; }
   else if (!strcmp(k, "show_alert")) { if (!parse_bool(v, s.show_alert)) e = "show_alert: 0 or 1"; }
   else if (!strcmp(k, "show_zones")) { if (!parse_bool(v, s.show_zones)) e = "show_zones: 0 or 1"; }
-  else e = "unknown setting";
+  else if (!strcmp(k, "lang")) {
+    if (!strcmp(v, "uk")) s.lang = LANG_UK;
+    else if (!strcmp(v, "en")) s.lang = LANG_EN;
+    else e = "lang: uk or en";
+  } else e = "unknown setting";
   if (e && err) *err = e;
   return !e;
 }
@@ -172,6 +177,7 @@ bool settings_valid(const Settings& s) {
   const unsigned char* bools[] = {(const unsigned char*)&s.show_weather, (const unsigned char*)&s.show_alert,
                                   (const unsigned char*)&s.show_zones};
   for (auto b : bools) ok = ok && *b <= 1;
+  ok = ok && s.lang <= LANG_EN;
   return ok && settings_check(s, &e);
 }
 
@@ -182,10 +188,12 @@ bool settings_to_json(const Settings& s, char* buf, size_t cap) {
   j.i64("night_start", s.night_start).i64("night_end", s.night_end).i64("night_wake", s.night_wake_s);
   j.i64("ldr_bright", s.ldr_bright).i64("ldr_dark", s.ldr_dark).i64("bl_min", s.bl_min).i64("bl_max", s.bl_max);
   j.i64("led_max", s.led_max);
-  j.boolean("show_weather", s.show_weather).boolean("show_alert", s.show_alert).boolean("show_zones", s.show_zones);
+  j.boolean("show_weather", s.show_weather).boolean("show_alert", s.show_alert).boolean("show_zones", s.show_zones).str("lang", lang_code(s.lang));
   j.end();
   return j.ok();
 }
+
+const char* lang_code(uint8_t lang) { return lang == LANG_EN ? "en" : "uk"; }
 
 bool is_night_hour(int h, int start, int end) {
   if (start == end) return false;

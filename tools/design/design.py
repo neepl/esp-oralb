@@ -5,7 +5,7 @@ pixel-art faces and weather icons, the teeth-zone chart and the screen layouts
 for the 320x240 landscape display. Renders mockups to PNG; the firmware assets
 are generated from the same data.
 
-    uv run --no-project --with pillow python design.py mock OUTDIR
+    uv run --no-project --with pillow python design.py mock OUTDIR   # Ukrainian in OUTDIR, English in OUTDIR/en
     uv run --no-project --with pillow python design.py gen      # -> include/gfx_assets.h
     uv run --no-project --with pillow python design.py golden   # -> test/data/golden_*.rle
 """
@@ -65,6 +65,75 @@ def draw_big(img: Image.Image, text: str, x: int, y: int, px: int, color, gap: f
         x += len(rows[0]) * px + px
 
 
+# -- strings, one table per display language ("uk" is the default) -------------------------
+# Every on-screen text lives here. English notes: the weekday is abbreviated and the month spelled out
+# ("Sat, 11 October", at most "Wed, 30 September" = 17 chars = 272 px at scale 2); "since" would not fit
+# next to the alert icon at scale 1 ("since 20:30" overflows the 320 px), so English says "at 20:30".
+LANGS = ["uk", "en"]  # firmware language index = position in this list
+LANG = {
+    "uk": {
+        "days": ["Понеділок", "Вівторок", "Середа", "Четвер", "П’ятниця", "Субота", "Неділя"],
+        "days_short": ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"],
+        "months": ["січня", "лютого", "березня", "квітня", "травня", "червня",
+                   "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"],  # genitive  # fmt: skip
+        "str": {
+            "last": "Остання:",
+            "at": "о",
+            "result_great": "Чудово!",
+            "result_short": "Замало",
+            "pressure": "Тиснеш!",
+            "waiting": "Чекаю щітку...",
+            "wifi_setup": "Wi-Fi: esp-oralb-setup",
+            "alert_red": "ТРИВОГА",
+            "alert_yellow": "ЗАГРОЗА",
+            "alert_none": "БЕЗПЕЧНО",  # "you are safe" (user wording; "Відбій" = all clear)
+            "alert_city": "Київ",
+            "since": "з",
+            "side_l": "Л",  # the user's left / right on the teeth chart
+            "side_r": "П",
+            "ota_busy": "Оновлення...",
+            "ota_error": "Помилка оновлення",
+        },
+    },
+    "en": {
+        "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+        "days_short": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "months": ["January", "February", "March", "April", "May", "June",
+                   "July", "August", "September", "October", "November", "December"],  # fmt: skip
+        "str": {
+            "last": "Last:",
+            "at": "at",
+            "result_great": "Great!",
+            "result_short": "Short!",
+            "pressure": "Too hard!",
+            "waiting": "Waiting for brush...",
+            "wifi_setup": "Wi-Fi: join esp-oralb-setup",
+            "alert_red": "ALERT",
+            "alert_yellow": "THREAT",
+            "alert_none": "SAFE",
+            "alert_city": "Kyiv",
+            "since": "at",
+            "side_l": "L",
+            "side_r": "R",
+            "ota_busy": "Updating...",
+            "ota_error": "Update failed",
+        },
+    },
+}
+STR_KEYS = list(LANG["uk"]["str"])
+assert all(list(LANG[l]["str"]) == STR_KEYS and len(LANG[l]["days"]) == 7 and len(LANG[l]["days_short"]) == 7
+           and len(LANG[l]["months"]) == 12 for l in LANGS)
+
+DATE_MAX_W = 304  # 320 px minus an 8 px margin each side
+
+
+def date_line(lang: str, weekday: int, day: int, month: int) -> str:
+    """Full weekday when the line fits at scale 2, else the short form ("Пт, 27 листопада": the full one is 352 px)."""
+    d = LANG[lang]
+    full = f"{d['days'][weekday]}, {day} {d['months'][month - 1]}"
+    return full if text_width(full, 2) <= DATE_MAX_W else f"{d['days_short'][weekday]}, {day} {d['months'][month - 1]}"
+
+
 # -- text font: Press Start 2P rendered at its native 8 px grid ----------------------
 _PS2P = ImageFont.truetype(str(HERE / "PressStart2P-Regular.ttf"), 8)
 TEXT_CHARS = (
@@ -81,6 +150,17 @@ def glyph(ch: str) -> list[str]:
     return ["".join("1" if im.getpixel((x, y)) else "0" for x in range(8)) for y in range(8)]
 
 
+
+
+def _all_text() -> str:
+    parts = []
+    for l in LANG.values():
+        parts += l["days"] + l["days_short"] + l["months"] + list(l["str"].values())
+    return "".join(parts) + "0123456789:+-° "
+
+
+# the font subset = base set + every character any language uses (so a new string can never fall back to "?")
+TEXT_CHARS = "".join(sorted(set(TEXT_CHARS) | set(_all_text()), key=ord))
 _GLYPHS = {c: glyph(c) for c in TEXT_CHARS}
 
 
@@ -299,25 +379,6 @@ def draw_progress(img, cx: int, y: int, seconds: int, size: int = 12, gap: int =
         x += size + gap
 
 
-# -- Ukrainian strings ------------------------------------------------------------------
-DAYS = ["Понеділок", "Вівторок", "Середа", "Четвер", "П’ятниця", "Субота", "Неділя"]
-MONTHS_GEN = ["січня", "лютого", "березня", "квітня", "травня", "червня",
-              "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"]  # fmt: skip
-STR = {
-    "last": "Остання:",
-    "at": "о",
-    "great": "Чудово!",
-    "short": "Замало",
-    "pressure": "Тиснеш!",
-    "waiting": "Чекаю щітку...",
-    "wifi_setup": "Wi-Fi: esp-oralb-setup",
-    "alert_red": "ТРИВОГА",
-    "alert_yellow": "ЗАГРОЗА",
-    "alert_none": "БЕЗПЕЧНО",  # "you are safe" (user wording; "Відбій" = all clear)
-    "alert_city": "Київ",
-    "since": "з",
-}
-
 # Air-raid siren (siren.pp.ua / ukrainealarm alert state for the configured region)
 SIREN = [
     "................",
@@ -407,11 +468,12 @@ def draw_icon(img, art: list[str], x: int, y: int, px: int, color) -> None:
                 d.rectangle([x + c * px, y + r * px, x + (c + 1) * px - 1, y + (r + 1) * px - 1], fill=col)
 
 
-def draw_alert(img, state: str | None, since: str | None) -> None:
+def draw_alert(img, state: str | None, since: str | None, lang: str = "uk") -> None:
     """Bottom-right block of the clock screen. state: "red", "yellow", "none", or None (unknown: hidden)."""
     if state is None:
         return
     color, key = ALERT_STYLE[state]
+    STR = LANG[lang]["str"]
     # vertically centred on the weather icon (its art spans ~y 160..216, centre 188)
     draw_icon(img, ALERT_ICON[state], 196, 164, 3, color)
     full = state != "none" and since
@@ -427,12 +489,13 @@ def mmss(s: int) -> str:
 
 # -- screens ------------------------------------------------------------------------------
 def screen_clock(hh=7, mm=42, weekday=5, day=10, month=10, temp=12, weather="partly", last=None, colon=True,
-                 alert="none", alert_since=None) -> Image.Image:
+                 alert="none", alert_since=None, lang="uk") -> Image.Image:
+    STR = LANG[lang]["str"]
     img = Image.new("RGB", (W, H), BG)
     t = f"{hh:02d}{':' if colon else ' '}{mm:02d}"  # colon blinks at 1 Hz; " " keeps the width
     px = 13
     draw_big(img, t, (W - big_width(t, px)) // 2, 22, px, FG)
-    draw_text_c(img, f"{DAYS[weekday]}, {day} {MONTHS_GEN[month - 1]}", W // 2, 112, 2, FG)
+    draw_text_c(img, date_line(lang, weekday, day, month), W // 2, 112, 2, FG)
     # bottom row: weather left, last session right
     draw_art(img, WEATHER[weather], 14, 156, 4)
     draw_text(img, f"{temp:+d}°", 86, 176, 3, FG)
@@ -442,11 +505,12 @@ def screen_clock(hh=7, mm=42, weekday=5, day=10, month=10, temp=12, weather="par
         draw_text(img, mmss(secs), 196, 180, 3, FG if secs >= 120 else DIM)
         draw_text(img, f"{STR['at']} {at}", 196, 210, 1, DIM)
     else:
-        draw_alert(img, alert, alert_since)
+        draw_alert(img, alert, alert_since, lang)
     return img
 
 
-def screen_brushing(secs=83, coverage=None, current="UIL", high=False, blink_on=True) -> Image.Image:
+def screen_brushing(secs=83, coverage=None, current="UIL", high=False, blink_on=True, lang="uk") -> Image.Image:
+    STR = LANG[lang]["str"]
     img = Image.new("RGB", (W, H), BG)
     t = mmss(secs)
     px = 11
@@ -458,16 +522,17 @@ def screen_brushing(secs=83, coverage=None, current="UIL", high=False, blink_on=
     if high:
         draw_text(img, STR["pressure"], 8, H - 16, 1, WARN)
     # side labels: the user's left / right
-    draw_text(img, "Л", (W - tw) // 2 - 22, 100 + th // 2 - 4, 1, DIM)
-    draw_text(img, "П", (W + tw) // 2 + 14, 100 + th // 2 - 4, 1, DIM)
+    draw_text(img, STR["side_l"], (W - tw) // 2 - 22, 100 + th // 2 - 4, 1, DIM)
+    draw_text(img, STR["side_r"], (W + tw) // 2 + 14, 100 + th // 2 - 4, 1, DIM)
     return img
 
 
-def screen_result(secs=134, coverage=None) -> Image.Image:
+def screen_result(secs=134, coverage=None, lang="uk") -> Image.Image:
+    STR = LANG[lang]["str"]
     img = Image.new("RGB", (W, H), BG)
     ok = secs >= 120
     draw_art(img, FACE_HAPPY if ok else FACE_SAD, 8, 32, 8, ACCENT, gap=1)
-    draw_text_c(img, STR["great"] if ok else STR["short"], 8 + 64, 176, 2, ACCENT if ok else DIM)
+    draw_text_c(img, STR["result_great"] if ok else STR["result_short"], 8 + 64, 176, 2, ACCENT if ok else DIM)
     t = mmss(secs)
     px = 8
     draw_big(img, t, 196 - big_width(t, px) // 2 + 30, 18, px, FG)
@@ -484,16 +549,25 @@ def demo_coverage(progress: float) -> dict[str, float]:
 
 
 def mock(out: Path) -> list[Path]:
+    """Writes the Ukrainian mockups to OUT and the English ones to OUT/en."""
+    paths = _mock(out, "uk")
+    paths += _mock(out / "en", "en")
+    return paths
+
+
+def _mock(out: Path, lang: str) -> list[Path]:
     out.mkdir(parents=True, exist_ok=True)
     shots = {
-        "1-clock": screen_clock(),
-        "2-brushing": screen_brushing(83, demo_coverage(0.38), "UIL"),
-        "3-brushing-pressure": screen_brushing(47, demo_coverage(0.2), "UOR", high=True),
-        "4-result-good": screen_result(134, demo_coverage(1.0)),
-        "5-result-short": screen_result(52, demo_coverage(0.4)),
+        "1-clock": screen_clock(lang=lang),
+        "2-brushing": screen_brushing(83, demo_coverage(0.38), "UIL", lang=lang),
+        "3-brushing-pressure": screen_brushing(47, demo_coverage(0.2), "UOR", high=True, lang=lang),
+        "4-result-good": screen_result(134, demo_coverage(1.0), lang=lang),
+        "5-result-short": screen_result(52, demo_coverage(0.4), lang=lang),
         "6-weather-icons": weather_sheet(),
-        "7-clock-night": screen_clock(hh=23, mm=15, temp=9, weather="clear_night"),
-        "8-clock-night-partly": screen_clock(hh=2, mm=40, temp=7, weather="partly_night", last=None),
+        "9-clock-alert-red": screen_clock(hh=20, mm=52, temp=13, weather="partly_night", alert="red", alert_since="20:49", lang=lang),
+        "10-clock-alert-yellow": screen_clock(hh=20, mm=47, weekday=2, day=30, month=9, temp=13, weather="partly_night", alert="yellow", alert_since="20:30", lang=lang),
+        "7-clock-night": screen_clock(hh=23, mm=15, temp=9, weather="clear_night", lang=lang),
+        "8-clock-night-partly": screen_clock(hh=2, mm=40, temp=7, weather="partly_night", last=None, lang=lang),
     }
     paths = []
     for name, im in shots.items():
@@ -621,17 +695,33 @@ def gen_header(out: Path) -> None:
         a("    {%s, %d, {%s}}," % (_c(z), len(cs), ", ".join("{%d, %d}" % c for c in pad)))
     a("};")
     a("")
-    a("// Ukrainian strings (UTF-8)")
-    a("constexpr const char* DAYS[7] = {%s};  // Monday first" % ", ".join(_c(d) for d in DAYS))
-    a("constexpr const char* MONTHS_GEN[12] = {%s};" % ", ".join(_c(m) for m in MONTHS_GEN))
-    for k, v in STR.items():
-        a("constexpr const char* STR_%s = %s;" % (k.upper(), _c(v)))
+    a("// UI strings per language (UTF-8); index = Lang enum in settings.h (uk, en). Default: uk")
+    a("struct LangStrings {")
+    a("  const char* days[7];  // Monday first")
+    a("  const char* days_short[7];  // used when the full date line is wider than DATE_MAX_W")
+    a("  const char* months[12];")
+    for k in STR_KEYS:
+        a("  const char* %s;" % k)
+    a("};")
+    a("constexpr int LANG_COUNT = %d;" % len(LANGS))
+    a("constexpr int DATE_MAX_W = %d;" % DATE_MAX_W)
+    a("constexpr LangStrings LANGS[LANG_COUNT] = {")
+    for l in LANGS:
+        d = LANG[l]
+        a("    {  // " + l)
+        a("        {%s}," % ", ".join(_c(x) for x in d["days"]))
+        a("        {%s}," % ", ".join(_c(x) for x in d["days_short"]))
+        a("        {%s}," % ", ".join(_c(x) for x in d["months"]))
+        a("        " + ", ".join(_c(d["str"][k]) for k in STR_KEYS) + ",")
+        a("    },")
+    a("};")
     a("")
-    a("struct AlertStyle { const char* const* art; uint32_t color; const char* label; bool label_dim; };")
+    a("// per-state alert icon + colour; the label is LangStrings::alert_red / alert_yellow / alert_none")
+    a("struct AlertStyle { const char* const* art; uint32_t color; bool label_dim; };")
     a("constexpr AlertStyle ALERT_STYLES[3] = {  // red, yellow, none")
     for state in ("red", "yellow", "none"):
         col, key = ALERT_STYLE[state]
-        a("    {ALERT_ICON_%s, %s, STR_%s, false}," % (state.upper(), _rgb(col), key.upper()))  # label in the state colour
+        a("    {ALERT_ICON_%s, %s, false}," % (state.upper(), _rgb(col)))  # label in the state colour
     a("};")
     a("")
     a("}  // namespace gfx")
@@ -652,6 +742,16 @@ def golden_scenarios() -> dict[str, Image.Image]:
         "pressure": screen_brushing(47, demo_coverage(0.2), "UOR", high=True),
         "result_good": screen_result(134, demo_coverage(1.0)),
         "result_short": screen_result(52, demo_coverage(0.4)),
+        # English (Scene::lang = 1); the Ukrainian goldens above must stay byte-identical
+        "en_clock": screen_clock(lang="en"),
+        "en_clock_alert_red": screen_clock(hh=20, mm=52, temp=13, weather="partly_night", alert="red", alert_since="20:49", lang="en"),
+        "en_clock_alert_yellow": screen_clock(hh=20, mm=47, weekday=2, day=30, month=9, temp=13, weather="partly_night", alert="yellow", alert_since="20:30", lang="en"),
+        "en_brushing": screen_brushing(83, demo_coverage(0.38), "UIL", lang="en"),
+        "en_pressure": screen_brushing(47, demo_coverage(0.2), "UOR", high=True, lang="en"),
+        "en_result_good": screen_result(134, demo_coverage(1.0), lang="en"),
+        "en_result_short": screen_result(52, demo_coverage(0.4), lang="en"),
+        # longest Ukrainian date: the full line overflows, so the weekday is shortened
+        "clock_date_short": screen_clock(weekday=4, day=27, month=11),
     }
 
 

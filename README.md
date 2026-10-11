@@ -8,7 +8,7 @@ connects over GATT once brushing starts, and shows:
 * **Brushing**: large timer, pressure warning and, if the brush streams IMU data, the 16 mouth zones.
 * **Result**: a good/bad smiley for a few seconds after the session.
 
-Pixel design with Ukrainian text, light-sensor backlight, screen off at night (touch wakes it),
+Pixel design with Ukrainian (default) or English text (`lang` setting), light-sensor backlight, screen off at night (touch wakes it),
 RGB status LED, telnet log and OTA updates over Wi-Fi.
 
 Repository layout: the firmware is at the root (PlatformIO project). `tools/python/` is the original
@@ -70,7 +70,7 @@ Pinned libraries: LovyanGFX 1.2.28, NimBLE-Arduino 2.5.1, WiFiManager 2.0.17 (it
 
 ## Screens (landscape 320x240, pixel design)
 
-Black background, pixel fonts, Ukrainian text. The single source of truth is `tools/design/design.py`
+Black background, pixel fonts, Ukrainian text by default (English selectable, see "Language" below). The single source of truth is `tools/design/design.py`
 (`uv run --no-project --with pillow python design.py mock OUT` renders mockups; `gen` writes
 `include/gfx_assets.h`; `golden` writes `test/data/golden_*.rle`). The firmware draws the same
 coordinates through `lib/core/screens.cpp`, and a native test compares the result pixel for pixel.
@@ -90,6 +90,19 @@ Authors, SIL Open Font License 1.1 (`tools/design/OFL.txt`).
 Rendering uses four 320x60 sprite bands (38 KB; no full-screen framebuffer, no PSRAM).
 The panel is RGB565, the mockups are RGB888, so colours differ by at most 7 per channel on the device;
 the native test compares RGB888 exactly.
+
+## Language
+
+The `lang` setting (web page select, `uk` default or `en`) switches every on-screen text live, no reboot: weekday and date line,
+result captions, pressure warning, status lines, alert block, side labels and the OTA notices. `tools/design/design.py` holds one
+string table per language (`LANG`, with `days`, `months` and `str`); `gen` emits both into `include/gfx_assets.h` as
+`gfx::LANGS[]` and the font subset is the union of the base set and every character used by any language (so a new string
+cannot silently render as `?`). The firmware picks the table through `Scene::lang`. English: "Sat, 11 October" (3-letter weekday,
+the longest line "Wed, 30 September" is 272 of 320 px), "Great!" / "Too short" / "Too hard!" / "Waiting for brush...",
+alert block "ALERT" / "THREAT" / "SAFE", "Kyiv", "at HH:MM" (the Ukrainian "з" is "since", but "since 20:30" does not fit beside the
+icon), side labels L / R. `design.py mock OUT` renders Ukrainian into `OUT` and English into `OUT/en`; English goldens are
+`test/data/golden_en_*.rle` (the Ukrainian ones are unchanged). Settings blob version 2 adds `lang`; a stored version 1 blob loads
+with `uk`. The web page itself is English only.
 
 ## Weather
 
@@ -179,7 +192,7 @@ Wi-Fi setup portal is open (port 80) and during OTA, and comes back by itself.
 
 Settings (NVS namespace `cfg`, defaults = `config.h`, applied live): `lat`, `lon`, `loc` (display name only), `region` (alert region
 id), `tz` (POSIX TZ string), `night_start`, `night_end`, `night_wake` (s), `ldr_bright`, `ldr_dark`, `bl_min`, `bl_max`,
-`led_max`, `show_weather`, `show_alert`, `show_zones` (0/1). Night with `night_start == night_end` never happens. A new
+`led_max`, `show_weather`, `show_alert`, `show_zones` (0/1), `lang` (`uk` default | `en`, applied on the next frame). Night with `night_start == night_end` never happens. A new
 location or region invalidates the old data and refetches at once; a disabled alert stops polling; a disabled widget draws
 as its "no data" state (weather/alert hidden, plain brushing screen without the teeth chart; the zone tracking itself keeps
 running). The `config.h` values are only the defaults.

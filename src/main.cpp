@@ -51,6 +51,7 @@ void build_scene(Scene& s, double now, uint32_t ms) {
   s.blink_on = true;
   s.day = 1;
   s.month = 1;
+  s.lang = cfg.lang;
   Lock l;
   const Session& se = app.session;
   const ZoneTracker& tr = app.tracker;
@@ -98,8 +99,8 @@ void build_scene(Scene& s, double now, uint32_t ms) {
       s.alert = al;
       strncpy(s.alert_since, since, sizeof s.alert_since - 1);
     }
-    if (net_state() == NetState::PORTAL) snprintf(s.status, sizeof s.status, "%s", gfx::STR_WIFI_SETUP);
-    else if (!se.seen_recently(now, 3600)) snprintf(s.status, sizeof s.status, "%s", gfx::STR_WAITING);
+    if (net_state() == NetState::PORTAL) snprintf(s.status, sizeof s.status, "%s", gfx::LANGS[s.lang].wifi_setup);
+    else if (!se.seen_recently(now, 3600)) snprintf(s.status, sizeof s.status, "%s", gfx::LANGS[s.lang].waiting);
   }
 }
 
@@ -190,11 +191,11 @@ void loop() {
     uint32_t err = app.ota_error_ms;
     int pct = err ? -1 : app.ota_pct;
     if (!was_ota || pct != shown) {
-      if (err) ui_message("\xD0\x9F\xD0\xBE\xD0\xBC\xD0\xB8\xD0\xBB\xD0\xBA\xD0\xB0 \xD0\xBE\xD0\xBD\xD0\xBE\xD0\xB2\xD0\xBB\xD0\xB5\xD0\xBD\xD0\xBD\xD1\x8F", "");  // Помилка оновлення
+      if (err) ui_message(gfx::LANGS[cfg.lang].ota_error, "");
       else {
         char b[8];
         snprintf(b, sizeof b, "%d%%", pct);
-        ui_message("\xD0\x9E\xD0\xBD\xD0\xBE\xD0\xB2\xD0\xBB\xD0\xB5\xD0\xBD\xD0\xBD\xD1\x8F...", b);  // Оновлення...
+        ui_message(gfx::LANGS[cfg.lang].ota_busy, b);
       }
       shown = pct;
     }
