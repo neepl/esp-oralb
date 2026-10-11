@@ -42,7 +42,7 @@ static Golden& golden() {
   static bool loaded = false;
   if (loaded) return g;
   FILE* fp = fopen(TEST_DATA_DIR "/zones_golden.txt", "r");
-  TEST_ASSERT_NOT_NULL_MESSAGE(fp, "cannot open test/data/zones_golden.txt (run from esp32/)");
+  TEST_ASSERT_NOT_NULL_MESSAGE(fp, "cannot open test/data/zones_golden.txt (run from the repository root)");
   static char line[1024];
   while (fgets(line, sizeof line, fp)) {
     if (line[0] == '#') continue;

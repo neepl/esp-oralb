@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Export golden vectors for the C++ zone code from the Python reference (LDA path).
 
-    cd esp32 && uv run --project ../python python tools/make_golden.py
+    uv run --project tools/python python tools/make_golden.py
 
-Reads python/data/zones-*.jsonl and writes test/data/zones_golden.txt (line based):
+Reads tools/python/data/zones-*.jsonl and writes test/data/zones_golden.txt (line based):
 
     S t ax ay az gx gy gz     raw IMU sample (tracker fixture: first N_SAMPLES of the first recording)
     F f0..f11 zone            per-window imu12 feature + ZoneFilter output while replaying the S lines
@@ -23,9 +23,9 @@ N_SAMPLES = 1500
 N_NOGYRO = 300
 
 root = Path(__file__).resolve().parents[1]
-files = sorted((root.parent / "python" / "data").glob("zones-*.jsonl"))
+files = sorted((root / "tools" / "python" / "data").glob("zones-*.jsonl"))
 if not files:
-    sys.exit("no python/data/zones-*.jsonl")
+    sys.exit("no tools/python/data/zones-*.jsonl")
 model = zm.load_default()
 assert model.kind == "lda"
 zones = model.zones

@@ -1,5 +1,5 @@
 // Zone estimator: brush motion over a 0.5 s window -> brushing zone.
-// Port of python/src/esp_oralb/zonemodel.py (LinearZoneModel / "lda" path). No Arduino dependency.
+// Port of tools/python/src/esp_oralb/zonemodel.py (LinearZoneModel / "lda" path). No Arduino dependency.
 //
 // Per window: 12 features (tilt, gyro mean, gyro spread, accel spread), scored by an LDA
 // (w_z . ((x - mean) / scale) + b_z); a sticky HMM filter smooths the per-window decision.

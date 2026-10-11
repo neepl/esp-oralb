@@ -1,4 +1,4 @@
-// GATT constants and the ff0d IMU packet decoder (port of python/src/esp_oralb/gatt.py).
+// GATT constants and the ff0d IMU packet decoder (port of tools/python/src/esp_oralb/gatt.py).
 #pragma once
 #include <stddef.h>
 #include <stdint.h>

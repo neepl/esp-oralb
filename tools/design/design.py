@@ -523,8 +523,8 @@ def weather_sheet() -> Image.Image:
 
 
 # -- firmware asset generation ------------------------------------------------------------------
-ROOT = HERE.parents[1]  # esp32/
-ZONE_MODEL = ROOT.parent / "python" / "src" / "esp_oralb" / "zone_model.json"
+ROOT = HERE.parents[1]  # repository root
+ZONE_MODEL = ROOT / "tools" / "python" / "src" / "esp_oralb" / "zone_model.json"
 WEATHER_NAMES = list(WEATHER)  # clear partly cloudy fog rain snow storm: index = firmware icon id
 
 

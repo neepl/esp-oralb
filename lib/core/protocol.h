@@ -1,5 +1,5 @@
 // Oral-B BLE advertisement decoder (manufacturer data, company ID 0x00DC).
-// Port of python/src/esp_oralb/protocol.py. No Arduino dependency.
+// Port of tools/python/src/esp_oralb/protocol.py. No Arduino dependency.
 #pragma once
 #include <stddef.h>
 #include <stdint.h>

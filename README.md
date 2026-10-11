@@ -1,9 +1,20 @@
-# esp-oralb firmware (ESP32-2432S024C)
+# esp-oralb
 
-Live brushing display for an Oral-B iO 8, ported from the Python PoC in `../python`
-(`protocol.py`, `session.py`, `ring.py`, `ui.py`, `gatt.py`, `zonemodel.py`, `app.py`).
-It passively listens to the brush's BLE adverts, optionally connects over GATT for the IMU
-stream (16-zone coverage map), and shows the Oral-B iO handle style screens on a 2.4" display.
+A bathroom display for the Oral-B iO 8, replacing the SmartGuide that came with the Triumph 7000,
+on a 2.4" ESP32 "Cheap Yellow Display" (ESP32-2432S024C). It listens to the brush's BLE adverts,
+connects over GATT once brushing starts, and shows:
+
+* **Clock**: time, day of the week, date, Kyiv weather icon (day/night set) and the air-raid alert status.
+* **Brushing**: large timer, pressure warning and, if the brush streams IMU data, the 16 mouth zones.
+* **Result**: a good/bad smiley for a few seconds after the session.
+
+Pixel design with Ukrainian text, light-sensor backlight, screen off at night (touch wakes it),
+RGB status LED, telnet log and OTA updates over Wi-Fi.
+
+Repository layout: the firmware is at the root (PlatformIO project). `tools/python/` is the original
+Python proof of concept, still used to record zone sessions and train the zone model; `tools/design/`
+generates the pixel UI. The C++ in `lib/core/` is a port of the Python modules (`protocol.py`,
+`session.py`, `gatt.py`, `zonemodel.py`).
 
 ## Board and pinout
 
@@ -163,8 +174,8 @@ texts are generated from `tools/design/design.py` (`ALERT_ICON`, `ALERT_STYLE`, 
   Each 0.5 s window yields 12 features (tilt, gyro mean, gyro spread, accel spread) scored by an LDA
   model and smoothed by the sticky HMM filter. There is no grip alignment with the LDA model.
   Reconnect happens 3 s after a disconnect, once the brush advertises again.
-* The default model is `../python/src/esp_oralb/zone_model.json`, embedded as `lib/core/zone_model_data.h`
-  (regenerate with `uv run python tools/gen_model_header.py`).
+* The default model is `tools/python/src/esp_oralb/zone_model.json`, embedded as `lib/core/zone_model_data.h`
+  (regenerate with `python3 tools/gen_model_header.py`).
 
 ## Layout and tests
 
@@ -175,8 +186,9 @@ lib/core/                     plain C++17, no Arduino: protocol, session, imu (f
 test/test_core/               Unity tests (native)
 test/data/                    io8_session.txt (real capture), zones_golden.txt (Python reference vectors)
 tools/gen_model_header.py     zone_model.json -> C++ header
-tools/make_golden.py          Python -> golden fixture:  uv run --project ../python python tools/make_golden.py
+tools/make_golden.py          Python -> golden fixture:  uv run --project tools/python python tools/make_golden.py
 tools/design/                 design.py (pixel design source of truth; gen/golden/mock), OFL.txt, Press Start 2P font
+tools/python/                 Python PoC: live console display, zone recorder/trainer (uv project)
 ```
 
 Native tests replay the real iO 8 capture (same assertions as `test_real_session.py`), check the ff0d

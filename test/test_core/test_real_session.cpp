@@ -1,5 +1,5 @@
 // Replay the real iO 8 capture (changes only) through decoder + session; same checks as
-// python/tests/test_real_session.py.
+// tools/python/tests/test_real_session.py.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,7 +21,7 @@ struct Rec {
 static std::vector<Rec> load() {
   std::vector<Rec> out;
   FILE* fp = fopen(TEST_DATA_DIR "/io8_session.txt", "r");
-  TEST_ASSERT_NOT_NULL_MESSAGE(fp, "cannot open test/data/io8_session.txt (run from esp32/)");
+  TEST_ASSERT_NOT_NULL_MESSAGE(fp, "cannot open test/data/io8_session.txt (run from the repository root)");
   char line[256];
   while (fgets(line, sizeof line, fp)) {
     int h, m, s, pos = 0;

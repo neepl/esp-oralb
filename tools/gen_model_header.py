@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate lib/core/zone_model_data.h from python/src/esp_oralb/zone_model.json (the "lda" model).
+"""Generate lib/core/zone_model_data.h from tools/python/src/esp_oralb/zone_model.json (the "lda" model).
 
     uv run python tools/gen_model_header.py [model.json]
 
@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
-src = Path(sys.argv[1]) if len(sys.argv) > 1 else root.parent / "python/src/esp_oralb/zone_model.json"
+src = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "tools/python/src/esp_oralb/zone_model.json"
 m = json.loads(src.read_text())
 if m.get("type") != "lda":
     sys.exit(f"{src}: expected an 'lda' model, got {m.get('type')!r}")

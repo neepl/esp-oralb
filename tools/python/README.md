@@ -13,7 +13,7 @@ Screens:
 ## Run
 
 ```sh
-cd python
+cd tools/python
 uv run esp-oralb --demo          # simulated session, no brush needed
 uv run esp-oralb --raw           # print every Oral-B advert (check the brush is seen)
 uv run esp-oralb --log brush.log # live display, and record adverts to a file

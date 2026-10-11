@@ -1,4 +1,4 @@
-// Screen state machine: CLOCK -> BRUSHING -> RESULT -> CLOCK (port of session.py).
+// Screen state machine: CLOCK -> BRUSHING -> RESULT -> CLOCK (port of tools/python/src/esp_oralb/session.py).
 #pragma once
 #include <stdint.h>
 #include <string.h>
