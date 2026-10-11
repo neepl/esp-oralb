@@ -11,6 +11,25 @@ connects over GATT once brushing starts, and shows:
 Pixel design with Ukrainian (default) or English text (`lang` setting), light-sensor backlight, screen off at night (touch wakes it),
 RGB status LED, telnet log and OTA updates over Wi-Fi.
 
+## Screenshots
+
+| | Ukrainian (default) | English |
+|---|---|---|
+| Clock | <img src="docs/screenshots/1-clock.png" width="320"> | <img src="docs/screenshots/en/1-clock.png" width="320"> |
+| Air-raid alert | <img src="docs/screenshots/9-clock-alert-red.png" width="320"> | <img src="docs/screenshots/en/10-clock-alert-yellow.png" width="320"> |
+| Brushing | <img src="docs/screenshots/2-brushing.png" width="320"> | <img src="docs/screenshots/en/2-brushing.png" width="320"> |
+| Too much pressure | <img src="docs/screenshots/3-brushing-pressure.png" width="320"> | <img src="docs/screenshots/en/3-brushing-pressure.png" width="320"> |
+| Result: 2 min reached | <img src="docs/screenshots/4-result-good.png" width="320"> | <img src="docs/screenshots/en/4-result-good.png" width="320"> |
+| Result: too short | <img src="docs/screenshots/5-result-short.png" width="320"> | <img src="docs/screenshots/en/5-result-short.png" width="320"> |
+| Night | <img src="docs/screenshots/7-clock-night.png" width="320"> | <img src="docs/screenshots/en/8-clock-night-partly.png" width="320"> |
+
+Weather icons: <img src="docs/screenshots/6-weather-icons.png" width="320">. All screens on one sheet:
+[Ukrainian](docs/screenshots/0-all.png), [English](docs/screenshots/en/0-all.png).
+
+These are renders from `tools/design/design.py` at 2x, not photos. The firmware draws the same pixels: a native test compares
+its frames with the design pixel for pixel (the panel's RGB565 shifts colours by a few levels). Regenerate with
+`uv run --project tools/python --with pillow python tools/design/design.py mock docs/screenshots`.
+
 Repository layout: the firmware is at the root (PlatformIO project). `tools/python/` is the original
 Python proof of concept, still used to record zone sessions and train the zone model; `tools/design/`
 generates the pixel UI. The C++ in `lib/core/` is a port of the Python modules (`protocol.py`,
@@ -81,11 +100,11 @@ Authors, SIL Open Font License 1.1 (`tools/design/OFL.txt`).
   2:00), 8 progress squares (15 s each, the current one blinks at 1 Hz), teeth chart (current zone cyan,
   coverage grey -> white at 7.5 s per zone, Л/П side labels). Without zone data (no ff0d) the chart is hidden and
   timer + progress are centred vertically.
-* **Result** (60 s after the session ends, sessions < 5 s ignored): pixel face (happy from 2:00, else sad) with
+* **Result** (15 s after the session ends, or 5 s once the brush is back on the charger; sessions < 5 s ignored): pixel face (happy from 2:00, else sad) with
   "Чудово!" / "Замало", final time, teeth chart with the coverage of the session that just ended
   (centred face and time when there is no zone data).
-* **Clock**: big `HH:MM`, "Субота, 10 жовтня", weather icon + temperature (hidden until the first fetch),
-  "Остання: M:SS о HH:MM", small status line ("Чекаю щітку...", or the Wi-Fi setup hint).
+* **Clock**: big `HH:MM`, "Субота, 10 жовтня" (the short weekday "Пт, 27 листопада" when the full line is wider than 304 px),
+  weather icon + temperature (hidden until the first fetch), air-raid alert block, small status line ("Чекаю щітку...", or the Wi-Fi setup hint).
 
 Rendering uses four 320x60 sprite bands (38 KB; no full-screen framebuffer, no PSRAM).
 The panel is RGB565, the mockups are RGB888, so colours differ by at most 7 per channel on the device;
@@ -97,8 +116,8 @@ The `lang` setting (web page select, `uk` default or `en`) switches every on-scr
 result captions, pressure warning, status lines, alert block, side labels and the OTA notices. `tools/design/design.py` holds one
 string table per language (`LANG`, with `days`, `months` and `str`); `gen` emits both into `include/gfx_assets.h` as
 `gfx::LANGS[]` and the font subset is the union of the base set and every character used by any language (so a new string
-cannot silently render as `?`). The firmware picks the table through `Scene::lang`. English: "Sat, 11 October" (3-letter weekday,
-the longest line "Wed, 30 September" is 272 of 320 px), "Great!" / "Too short" / "Too hard!" / "Waiting for brush...",
+cannot silently render as `?`). The firmware picks the table through `Scene::lang`. English: "Monday, 5 May" or "Sat, 11 October" (the full weekday when the line fits in 304 px, else the 3-letter one;
+the same rule applies to Ukrainian), "Great!" / "Short!" / "Too hard!" / "Waiting for brush...",
 alert block "ALERT" / "THREAT" / "SAFE", "Kyiv", "at HH:MM" (the Ukrainian "з" is "since", but "since 20:30" does not fit beside the
 icon), side labels L / R. `design.py mock OUT` renders Ukrainian into `OUT` and English into `OUT/en`; English goldens are
 `test/data/golden_en_*.rle` (the Ukrainian ones are unchanged). Settings blob version 2 adds `lang`; a stored version 1 blob loads
@@ -116,11 +135,11 @@ WMO codes map to icons: 0-1 clear, 2 partly, 3 cloudy, 45/48 fog, 51-67 and 80-8
 * **Light sensor** (CdS on GPIO34, ADC 0 dB): the backlight follows ambient light. The reading is smoothed
   (EMA over a few seconds), mapped linearly between `LDR_BRIGHT_RAW` (-> `BACKLIGHT_MAX`) and `LDR_DARK_RAW`
   (-> `BACKLIGHT_MIN`) and slew-limited, so it does not flicker. It replaces the old fixed level and idle dimming.
-  The log prints `ldr raw <avg> -> bl <level>` every 10 s: use it to calibrate the two raw values in `include/config.h`
+  The log prints `ldr raw <avg> -> bl <level>` when the level changes: use it to calibrate the two raw values in `include/config.h`
   (CYD boards usually read high in the dark and near 0 in bright light).
 * **Night mode**: between `NIGHT_START_H` (23) and `NIGHT_END_H` (7), on the clock screen without brush activity the
   backlight turns fully off after `NIGHT_WAKE_S` (8) seconds. A touch wakes it for the same 8 s. Brushing turns it on,
-  and after a night session the result screen stays for its normal 60 s hold, then the clock goes dark 8 s later. When on at
+  and after a night session the result screen stays for its normal hold, then the clock goes dark 8 s later. When on at
   night the sensor level is used. BLE keeps running (no deep sleep).
 * **RGB LED** (GPIO 4/16/17, active low via `LED_ACTIVE_LOW`, brightness capped by `LED_MAX` = 40/255):
   dim green while brushing; red flashing at about 4 Hz under high pressure (takes precedence); three green blinks (1.5 s)
